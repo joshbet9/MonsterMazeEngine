@@ -1,48 +1,41 @@
 # MonsterMazeEngine
 
-Pure, headless, **1.8-accurate** simulation of Mineplex Monster Maze.
+Pure, headless **1.8-accurate** Monster Maze sim + local playable game.
 
-- No Bukkit / NMS / Minecraft dependencies
-- Deterministic tick-based engine
-- Shared state & action API for AI training
-- All kits, Safe Pads, monsters, stage timer
-- CSV trace harness + top-down PNG renderer
+- No Bukkit / NMS
+- Deterministic 20 TPS engine
+- Kits: Jumper, Body Builder, Slowballer, Repulsor, Maverick
+- Swing play window + CSV traces + PNG renderer
 
-## Quick start
+## Play
 
 ```bash
-mvn -q test
 mvn -q package
+java -cp target/classes me.monstermaze.engine.play.PlayMenu
+```
+
+Or skip the menu:
+
+```bash
+java -cp target/classes me.monstermaze.engine.play.PlayFrame \
+  --kit JUMPER --mode ORIGINAL --layout 0 --monsters 40
+```
+
+**Controls:** WASD move · arrows turn · Space jump · Shift sprint · Q primary · E enhanced
+
+## Headless sim / traces
+
+```bash
 java -cp target/classes me.monstermaze.engine.cli.SimMain 400 sim-out
 ```
 
 ## Structure
 
 ```
-api/      GameState, Action, TickResult, MonsterMazeEngine
-maze/     layouts, graph, coordinates
-physics/  1.8 movement, knockback
-monster/  random-walk
-kit/      Jumper, Slowball, Body Builder, Repulsor, Maverick
-pad/      Safe Pad
-game/     EngineImpl, StageTimer
-trace/    TraceRecorder, TraceComparer
-render/   TopDownRenderer
-cli/      SimMain
+api/ game/ maze/ physics/ monster/ kit/ pad/
+trace/ render/ play/ cli/
 ```
-
-## Kits
-
-| Kit | Primary | Enhanced (Speed/Modern) |
-|-----|---------|-------------------------|
-| Jumper | Charged jumps | Pad restores charges |
-| Slowball | Snowballs (max 16, +1/2s) | Cryo Blitz freeze 6 blocks |
-| Body Builder | +max HP on first pad | Body Rush deflect |
-| Repulsor | Launch monsters (3 charges, 6 blocks) | — |
-| Maverick | (enhanced only) KB toward pad | — |
-
-See `docs/` for mechanics inventory and validation notes.
 
 ## License
 
-MIT — see LICENSE.
+MIT
