@@ -2,26 +2,30 @@
 
 ## Done
 
-- Repo scaffold, API types
-- Maze module (3 layouts, coordinates, graph)
-- **Jumper vertical slice**
-  - `PlayerPhysics18` - walk/sprint, jump, gravity, Jumper charges (15-tick gate), approximate speeding
-  - `Knockback` - UtilAction port: str 1.0, yAdd 0.75, yMax 1.2, ground +0.2, 4 HP, 20-tick cooldown
-  - `MonsterSimulator` - random-walk, 0.4 waypoint, U-turn avoid, 1.4 speed, launch/freeze stubs
-  - `SafePadSimulator` - 5x5 isOn (+/-2.5), spawn heuristic
-  - `StageTimer` - 60/35->15s, first-arrival shorten, +15/+30 monsters, center det clock
-  - `EngineImpl` wires all of the above; `new EngineImpl(n)` for lighter sims
-  - Integration tests in `EngineSliceTest`
+- API, maze layouts, coordinates, graph
+- Physics, knockback, monsters, Safe Pads, stage timer
+- **All kits**: Jumper, Slowball (+Cryo), Body Builder (+Body Rush), Repulsor, Maverick
+- **Trace harness**: `TraceRecorder` / `TraceComparer` (CSV) for pure-vs-live diffs
+- **Top-down renderer**: `TopDownRenderer` PNG export
+- **CLI**: `SimMain` writes frames + trace.csv
 
-## Known approximations (validate vs live 1.8)
+## How to run a sim
 
-- Speeding multiplier (1.5x) and exact jump-spam timing
-- Air control coefficients
-- Monster CreatureMoveFast pathing vs pure step-toward-target
-- Safe Pad placement (heuristic, not full plugin pad list)
+```bash
+mvn -q package
+java -cp target/classes me.monstermaze.engine.cli.SimMain 400 sim-out
+# -> sim-out/final.png, frame_*.png, trace.csv
+```
 
-## Next
+## Trace validation workflow
 
-- Other kits (Slowball, Body Builder, Repulsor, Maverick)
-- Trace-replay validation harness against live plugin
-- Optional top-down renderer
+1. Export a CSV from the live 1.8 plugin with the same columns as `TraceFrame.csvHeader()`
+2. Replay actions in the pure engine (or compare engine-generated CSV)
+3. `TraceComparer.compare(engineFrames, liveFrames)`
+
+## Known approximations
+
+- Speeding multiplier and exact jump-spam timing
+- CreatureMoveFast vs step-toward-target
+- Safe Pad placement heuristic
+- Snowball only consumes charge in solo (no other players to slow)
