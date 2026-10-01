@@ -168,7 +168,10 @@ public final class EngineImpl implements MonsterMazeEngine {
                     events.add(new GameEvent(GameEventType.MONSTER_SPAWN, extra));
                 }
                 if (liveStartTick >= 0 && tick - liveStartTick >= StageTimer.CENTER_DETERIORATION_START_TICKS
-                        && centerDet < 11 && (tick - liveStartTick) % 40 == 0) centerDet++;
+                        && centerDet < 11 && (tick - liveStartTick) % 40 == 0) {
+                    centerDet++;
+                    CenterDeterioration.apply(workingGraph, centerDet);
+                }
             }
         }
 
