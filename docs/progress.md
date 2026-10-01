@@ -2,30 +2,26 @@
 
 ## Done
 
-- API, maze layouts, coordinates, graph
-- Physics, knockback, monsters, Safe Pads, stage timer
-- **All kits**: Jumper, Slowball (+Cryo), Body Builder (+Body Rush), Repulsor, Maverick
-- **Trace harness**: `TraceRecorder` / `TraceComparer` (CSV) for pure-vs-live diffs
-- **Top-down renderer**: `TopDownRenderer` PNG export
-- **CLI**: `SimMain` writes frames + trace.csv
+- Engine core (maze, physics, monsters, pads, kits, timer)
+- Trace harness + top-down PNG renderer
+- **Playable local game**
+  - `PlayMenu` kit/mode/layout select
+  - `PlayFrame` 20 TPS Swing window + HUD
+  - Controls: WASD move, arrows turn, Space jump, Shift sprint, Q primary, E enhanced
+- **Center deterioration** disables graph cells as the stage progresses
 
-## How to run a sim
+## Run the game
 
 ```bash
 mvn -q package
-java -cp target/classes me.monstermaze.engine.cli.SimMain 400 sim-out
-# -> sim-out/final.png, frame_*.png, trace.csv
+java -cp target/classes me.monstermaze.engine.play.PlayMenu
+# or directly:
+java -cp target/classes me.monstermaze.engine.play.PlayFrame --kit JUMPER --monsters 40
 ```
 
-## Trace validation workflow
+## Next ideas
 
-1. Export a CSV from the live 1.8 plugin with the same columns as `TraceFrame.csvHeader()`
-2. Replay actions in the pure engine (or compare engine-generated CSV)
-3. `TraceComparer.compare(engineFrames, liveFrames)`
-
-## Known approximations
-
-- Speeding multiplier and exact jump-spam timing
-- CreatureMoveFast vs step-toward-target
-- Safe Pad placement heuristic
-- Snowball only consumes charge in solo (no other players to slow)
+- Camera follow / zoom on player
+- Sound/juice
+- AI agent loop using the same Action API
+- Live-plugin CSV exporter for TraceComparer
