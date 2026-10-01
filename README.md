@@ -4,44 +4,45 @@ Pure, headless, **1.8-accurate** simulation of Mineplex Monster Maze.
 
 - No Bukkit / NMS / Minecraft dependencies
 - Deterministic tick-based engine
-- Shared state & action API for AI training and future adapters
-- Starts as a faithful reflection of the 1.8 plugin; used to train and adjust logic that also runs on the real servers
+- Shared state & action API for AI training
+- All kits, Safe Pads, monsters, stage timer
+- CSV trace harness + top-down PNG renderer
 
-## Goal
+## Quick start
 
-This repository is the **standalone game / simulation core**.
-
-The real Minecraft 1.8 plugin (in the separate MonsterMaze repo) remains the reference implementation.  
-This engine must match its mechanics so that AI logic trained here transfers cleanly.
-
-## Status
-
-Initial scaffold. API and package layout are in place. Mechanics implementation is next.
+```bash
+mvn -q test
+mvn -q package
+java -cp target/classes me.monstermaze.engine.cli.SimMain 400 sim-out
+```
 
 ## Structure
 
 ```
-src/main/java/me/monstermaze/engine/
-├── api/          # GameState, Action, TickResult, MonsterMazeEngine
-├── maze/         # layouts, graph, coordinates
-├── physics/      # 1.8 movement, knockback, collision
-├── monster/      # random-walk simulation
-├── kit/          # Jumper, Slowball, Body Builder, Repulsor, Maverick
-├── pad/          # Safe Pad logic
-├── game/         # stage timer, spawner, EngineImpl
-└── util/
+api/      GameState, Action, TickResult, MonsterMazeEngine
+maze/     layouts, graph, coordinates
+physics/  1.8 movement, knockback
+monster/  random-walk
+kit/      Jumper, Slowball, Body Builder, Repulsor, Maverick
+pad/      Safe Pad
+game/     EngineImpl, StageTimer
+trace/    TraceRecorder, TraceComparer
+render/   TopDownRenderer
+cli/      SimMain
 ```
 
-See `docs/` for the full mechanics inventory, state/action contract, and validation priorities.
+## Kits
 
-## Building
+| Kit | Primary | Enhanced (Speed/Modern) |
+|-----|---------|-------------------------|
+| Jumper | Charged jumps | Pad restores charges |
+| Slowball | Snowballs (max 16, +1/2s) | Cryo Blitz freeze 6 blocks |
+| Body Builder | +max HP on first pad | Body Rush deflect |
+| Repulsor | Launch monsters (3 charges, 6 blocks) | — |
+| Maverick | (enhanced only) KB toward pad | — |
 
-```bash
-mvn -q test
-```
-
-Java 17+ recommended (Java 8 compatible API surface is intentional for easier interop).
+See `docs/` for mechanics inventory and validation notes.
 
 ## License
 
-See LICENSE.
+MIT — see LICENSE.
