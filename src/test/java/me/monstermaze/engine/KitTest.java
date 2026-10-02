@@ -18,7 +18,7 @@ class KitTest {
         while (state.phase != GamePhase.LIVE) {
             state = engine.tick(state, Action.noop()).next;
         }
-        Action repulse = new Action(0, 0, false, false, false, 0, 0, true, false, null);
+        Action repulse = new Action(0, 0, false, false, 0, true);
         TickResult r = engine.tick(state, repulse);
         assertEquals(2, r.next.player.abilityCharges);
         assertTrue(r.events.stream().anyMatch(e -> e.type == GameEventType.ABILITY_USED));
