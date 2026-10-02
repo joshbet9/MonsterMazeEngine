@@ -37,7 +37,7 @@ public final class PlayFrame extends JFrame {
     private final UiTheme theme;
     private double zoom;
     private boolean firstPerson;
-    private float cameraYaw;
+    private volatile float cameraYaw;
     private float cameraPitch = -18.0f;
     private double cameraDistance = 9.0;
     private int lastMouseX;
@@ -139,12 +139,10 @@ public final class PlayFrame extends JFrame {
                 int dy = e.getY() - lastMouseY;
                 lastMouseX = e.getX();
                 lastMouseY = e.getY();
-                // In Minecraft, horizontal camera heading and movement heading
-                // are the same control frame: W/A/S/D are evaluated relative to
-                // what the player is looking toward. Keep the third-person camera
-                // and player yaw coupled so rotating the view changes movement.
-                state.player.yaw = normaliseYaw(state.player.yaw + dx * 0.45f);
-                cameraYaw = state.player.yaw;
+                // Camera heading is the movement heading, as in Minecraft.
+                // Do not mutate the shared simulation state from the Swing EDT;
+                // the tick thread consumes cameraYaw and applies it atomically.
+                cameraYaw = normaliseYaw(cameraYaw + dx * 0.45f);
                 cameraPitch = clamp(cameraPitch - dy * 0.30f, -70.0f, 30.0f);
                 panel.repaint();
             }
@@ -253,9 +251,13 @@ public final class PlayFrame extends JFrame {
             return;
         }
 
+        if (keys.contains(KeyEvent.VK_LEFT)) cameraYaw = normaliseYaw(cameraYaw - 6.0f);
+        if (keys.contains(KeyEvent.VK_RIGHT)) cameraYaw = normaliseYaw(cameraYaw + 6.0f);
+
+        // The rendered camera and the player's horizontal look direction share
+        // one heading. This makes W/A/S/D evaluate relative to the camera.
+        state.player.yaw = cameraYaw;
         float yawDelta = 0.0f;
-        if (keys.contains(KeyEvent.VK_LEFT)) yawDelta -= 6.0f;
-        if (keys.contains(KeyEvent.VK_RIGHT)) yawDelta += 6.0f;
 
         double strafe = 0.0, forward = 0.0;
         if (keys.contains(KeyEvent.VK_W) || keys.contains(KeyEvent.VK_UP)) forward += 1.0;
@@ -278,8 +280,6 @@ public final class PlayFrame extends JFrame {
         TickResult result = engine.tick(state, action);
         Sfx.playEvents(result.events);
         state = result.next;
-        // Camera yaw follows the player's horizontal look direction; movement
-        // input is therefore always evaluated in the visible camera frame.
         cameraYaw = state.player.yaw;
         if (state.stage > peakStage) peakStage = state.stage;
 
