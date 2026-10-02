@@ -11,18 +11,14 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Local playable Monster Maze (human player only).
- * AI training uses the same engine Action API from outside this UI
- * (e.g. MonsterMazeAI) — not a separate in-game mode.
- */
+/** Local playable Monster Maze. Esc returns to main menu when launched from MainMenu. */
 public final class PlayFrame extends JFrame {
-
-    private static final int VIEW = 520;
 
     private final EngineImpl engine;
     private GameState state;
@@ -30,15 +26,29 @@ public final class PlayFrame extends JFrame {
     private final GamePanel panel;
     private final JLabel hud;
     private final Set<Integer> keys = ConcurrentHashMap.newKeySet();
+    private final GameConfig config;
+    private final MainMenu mainMenu;
     private float yaw = 0f;
-    private double zoom = 2.2;
+    private double zoom;
+    private final int viewSize;
     private volatile boolean running = true;
     private int peakStage = 0;
     private long runStartMs = System.currentTimeMillis();
     private boolean endShown = false;
 
     public PlayFrame(MazeMode mode, KitType kit, int layoutId, long seed, int monsterOverride) {
+        this(mode, kit, layoutId, seed, monsterOverride, null, null);
+    }
+
+    public PlayFrame(MazeMode mode, KitType kit, int layoutId, long seed, int monsterOverride,
+                     GameConfig config, MainMenu mainMenu) {
         super("Monster Maze \u2014 " + displayKit(kit));
+        this.config = config != null ? config : GameConfig.load();
+        this.mainMenu = mainMenu;
+        this.zoom = this.config.zoom;
+        this.viewSize = this.config.windowSize;
+        Sfx.setEnabled(this.config.sfxEnabled);
+
         int monsters = monsterOverride >= 0 ? monsterOverride : StageTimer.starterMonsters(mode);
         this.engine = new EngineImpl(monsters);
         this.state = engine.initialState(mode, layoutId, kit, seed);
@@ -51,7 +61,7 @@ public final class PlayFrame extends JFrame {
         hud.setBackground(new Color(18, 18, 26));
         hud.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
 
-        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout());
         add(hud, BorderLayout.NORTH);
         add(panel, BorderLayout.CENTER);
@@ -59,15 +69,26 @@ public final class PlayFrame extends JFrame {
         pack();
         setLocationRelativeTo(null);
 
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowClosed(WindowEvent e) {
+                running = false;
+                if (mainMenu != null) mainMenu.returnFromGame();
+            }
+        });
+
         addKeyListener(new KeyAdapter() {
-            private boolean sfxOn = true;
+            private boolean sfxOn = PlayFrame.this.config.sfxEnabled;
             @Override public void keyPressed(KeyEvent e) {
                 keys.add(e.getKeyCode());
                 int code = e.getKeyCode();
                 if (code == KeyEvent.VK_EQUALS || code == KeyEvent.VK_ADD) zoom = Math.min(6.0, zoom + 0.25);
                 else if (code == KeyEvent.VK_MINUS || code == KeyEvent.VK_SUBTRACT) zoom = Math.max(0.8, zoom - 0.25);
-                else if (code == KeyEvent.VK_0) zoom = 2.2;
+                else if (code == KeyEvent.VK_0) zoom = PlayFrame.this.config.zoom;
                 else if (code == KeyEvent.VK_M) { sfxOn = !sfxOn; Sfx.setEnabled(sfxOn); }
+                else if (code == KeyEvent.VK_ESCAPE) {
+                    running = false;
+                    dispose();
+                }
             }
             @Override public void keyReleased(KeyEvent e) { keys.remove(e.getKeyCode()); }
         });
@@ -105,7 +126,8 @@ public final class PlayFrame extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     panel.repaint();
                     JOptionPane.showMessageDialog(this,
-                            "Eliminated!\nPeak stage: " + stage + "\nTime: " + secs + "s\nMobs at end: " + mobs,
+                            "Eliminated!\nPeak stage: " + stage + "\nTime: " + secs + "s\nMobs at end: " + mobs
+                                    + (mainMenu != null ? "\n\n(Close or Esc to return to menu)" : ""),
                             "Run over", JOptionPane.INFORMATION_MESSAGE);
                 });
             }
@@ -155,7 +177,7 @@ public final class PlayFrame extends JFrame {
         }
         sb.append(String.format("  Mobs %d  %s  zoom %.1fx", s.monsters.size(), s.phase, zoom));
         if (p.onSafePad) sb.append("  [PAD]");
-        sb.append("   +/- zoom  M=mute");
+        sb.append("   Esc=menu  +/- zoom  M=mute");
         return sb.toString();
     }
 
@@ -172,7 +194,7 @@ public final class PlayFrame extends JFrame {
 
     private final class GamePanel extends JPanel {
         GamePanel() {
-            setPreferredSize(new Dimension(VIEW, VIEW));
+            setPreferredSize(new Dimension(viewSize, viewSize));
             setBackground(Color.BLACK);
         }
 
@@ -215,11 +237,12 @@ public final class PlayFrame extends JFrame {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            MazeMode mode = MazeMode.ORIGINAL;
-            KitType kit = KitType.JUMPER;
-            int layout = 0;
-            int monsters = -1;
-            long seed = System.currentTimeMillis();
+            GameConfig cfg = GameConfig.load();
+            MazeMode mode = cfg.mazeMode();
+            KitType kit = cfg.kitType();
+            int layout = cfg.layout;
+            int monsters = cfg.monsterCount();
+            long seed = cfg.seedOrRandom();
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
                     case "--mode": mode = MazeMode.valueOf(args[++i].toUpperCase()); break;
@@ -235,7 +258,7 @@ public final class PlayFrame extends JFrame {
                     case "--seed": seed = Long.parseLong(args[++i]); break;
                 }
             }
-            PlayFrame frame = new PlayFrame(mode, kit, layout, seed, monsters);
+            PlayFrame frame = new PlayFrame(mode, kit, layout, seed, monsters, cfg, null);
             frame.setVisible(true);
             frame.startLoop();
         });
