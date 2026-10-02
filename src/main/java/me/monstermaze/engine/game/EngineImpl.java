@@ -22,6 +22,7 @@ public final class EngineImpl implements MonsterMazeEngine {
     private SeededRandom rng;
     private boolean firstArrivalThisStage;
     private long liveStartTick = -1;
+    private final List<int[]> padHistory = new ArrayList<>();
 
     public EngineImpl() {
         this(Coordinates.DEFAULT_CENTER_X, Coordinates.DEFAULT_CENTER_Y, Coordinates.DEFAULT_CENTER_Z, -1);
@@ -36,6 +37,8 @@ public final class EngineImpl implements MonsterMazeEngine {
         this.starterOverride = starterOverride;
     }
 
+    public MazeGraph getWorkingGraph() { return workingGraph; }
+
     private static boolean qol(MazeMode mode) { return mode != MazeMode.ORIGINAL; }
 
     @Override
@@ -48,6 +51,7 @@ public final class EngineImpl implements MonsterMazeEngine {
         this.workingGraph = new MazeGraph(layoutId);
         this.firstArrivalThisStage = false;
         this.liveStartTick = -1;
+        this.padHistory.clear();
 
         int spawnRow = Layouts.HALF, spawnCol = Layouts.HALF;
         int[][] spawns = workingGraph.spawnCells();
@@ -66,7 +70,8 @@ public final class EngineImpl implements MonsterMazeEngine {
 
         int starter = starterOverride >= 0 ? starterOverride : StageTimer.starterMonsters(mode);
         List<MonsterState> monsters = MonsterSimulator.spawnInitial(workingGraph, starter, centerX, centerY, centerZ, rng);
-        SafePadState activePad = SafePadSimulator.spawnPad(workingGraph, centerX, centerY, centerZ, rng, false);
+        SafePadState activePad = SafePadSimulator.spawnPad(workingGraph, centerX, centerY, centerZ, rng, false, padHistory);
+        if (activePad != null) padHistory.add(new int[]{activePad.centerX, activePad.centerZ});
         int phaseMax = StageTimer.maxTicks(mode, 0);
 
         return new GameState(0L, mode, GamePhase.STARTING, 0, phaseMax, phaseMax, 0, workingGraph.toMazeState(), player, monsters, activePad, null);
@@ -146,13 +151,27 @@ public final class EngineImpl implements MonsterMazeEngine {
                     events.add(new GameEvent(GameEventType.PAD_REACHED, stage));
                 }
                 if (timer <= StageTimer.PREVIEW_SECONDS * 20 && previewPad == null) {
-                    previewPad = SafePadSimulator.spawnPad(workingGraph, centerX, centerY, centerZ, rng, true);
+                    previewPad = SafePadSimulator.spawnPad(workingGraph, centerX, centerY, centerZ, rng, true, padHistory);
                 }
                 if (timer <= 0) {
                     stage++; timerMax = StageTimer.maxTicks(state.mode, stage); timer = timerMax; firstArrivalThisStage = false;
-                    activePad = previewPad != null
-                            ? new SafePadState(previewPad.centerX, previewPad.centerZ, previewPad.surfaceY, SafePadSimulator.DECAY_FULL, true, false)
-                            : SafePadSimulator.spawnPad(workingGraph, centerX, centerY, centerZ, rng, false);
+                    SafePadState prevActive = activePad;
+                    if (previewPad != null) {
+                        activePad = new SafePadState(previewPad.centerX, previewPad.centerZ, previewPad.surfaceY, SafePadSimulator.DECAY_FULL, true, false);
+                        SafePadSimulator.disablePadArea(workingGraph, centerX, centerZ, activePad);
+                    } else {
+                        activePad = SafePadSimulator.spawnPad(workingGraph, centerX, centerY, centerZ, rng, false, padHistory);
+                    }
+                    if (prevActive != null) SafePadSimulator.enablePadArea(workingGraph, centerX, centerZ, prevActive);
+                    if (activePad != null) padHistory.add(new int[]{activePad.centerX, activePad.centerZ});
+                    if (activePad != null) {
+                        List<MonsterState> kept = new ArrayList<>();
+                        for (MonsterState m : monsters) {
+                            if (SafePadSimulator.isOn(activePad, m.pos)) continue;
+                            kept.add(m);
+                        }
+                        monsters = kept;
+                    }
                     previewPad = null;
                     int extra = StageTimer.monstersPerTransition(state.mode);
                     if (starterOverride >= 0) extra = Math.min(extra, 10);
