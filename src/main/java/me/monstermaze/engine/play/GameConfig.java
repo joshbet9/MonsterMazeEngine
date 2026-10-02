@@ -10,7 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 
-/** Persistent player settings (kit, mode, layout, graphics, audio). */
+/** Persistent player settings. */
 public final class GameConfig {
 
     private static final Path PATH = Path.of(System.getProperty("user.home"), ".monstermaze-engine.properties");
@@ -23,7 +23,9 @@ public final class GameConfig {
     public double zoom = 2.2;
     public boolean sfxEnabled = true;
     public int windowSize = 520;
-    public long lastSeed = 0; // 0 = random each run
+    public long lastSeed = 0;
+    public boolean darkMode = true;
+    public boolean showControlsHint = true;
 
     public static GameConfig load() {
         GameConfig c = new GameConfig();
@@ -40,6 +42,8 @@ public final class GameConfig {
             c.sfxEnabled = Boolean.parseBoolean(p.getProperty("sfxEnabled", "true"));
             c.windowSize = Integer.parseInt(p.getProperty("windowSize", "520"));
             c.lastSeed = Long.parseLong(p.getProperty("lastSeed", "0"));
+            c.darkMode = Boolean.parseBoolean(p.getProperty("darkMode", "true"));
+            c.showControlsHint = Boolean.parseBoolean(p.getProperty("showControlsHint", "true"));
         } catch (Exception ignored) {
         }
         return c;
@@ -56,10 +60,10 @@ public final class GameConfig {
         p.setProperty("sfxEnabled", String.valueOf(sfxEnabled));
         p.setProperty("windowSize", String.valueOf(windowSize));
         p.setProperty("lastSeed", String.valueOf(lastSeed));
-        try {
-            try (OutputStream out = Files.newOutputStream(PATH)) {
-                p.store(out, "MonsterMazeEngine player config");
-            }
+        p.setProperty("darkMode", String.valueOf(darkMode));
+        p.setProperty("showControlsHint", String.valueOf(showControlsHint));
+        try (OutputStream out = Files.newOutputStream(PATH)) {
+            p.store(out, "MonsterMazeEngine player config");
         } catch (IOException ignored) {
         }
     }
@@ -68,30 +72,16 @@ public final class GameConfig {
         String k = kit.toUpperCase().replace('-', '_');
         if (k.equals("SLOWBALLER")) k = "SLOWBALL";
         if (k.equals("BODYBUILDER") || k.equals("BODY_BUILDER")) k = "BODY_BUILDER";
-        try {
-            return KitType.valueOf(k);
-        } catch (Exception e) {
-            return KitType.JUMPER;
-        }
+        try { return KitType.valueOf(k); } catch (Exception e) { return KitType.JUMPER; }
     }
 
     public MazeMode mazeMode() {
-        try {
-            return MazeMode.valueOf(mode.toUpperCase());
-        } catch (Exception e) {
-            return MazeMode.ORIGINAL;
-        }
+        try { return MazeMode.valueOf(mode.toUpperCase()); } catch (Exception e) { return MazeMode.ORIGINAL; }
     }
 
-    public int monsterCount() {
-        return useDefaultMobs ? -1 : monsters;
-    }
+    public int monsterCount() { return useDefaultMobs ? -1 : monsters; }
 
-    public long seedOrRandom() {
-        return lastSeed != 0 ? lastSeed : System.currentTimeMillis();
-    }
+    public long seedOrRandom() { return lastSeed != 0 ? lastSeed : System.currentTimeMillis(); }
 
-    public static Path configPath() {
-        return PATH;
-    }
+    public static Path configPath() { return PATH; }
 }
