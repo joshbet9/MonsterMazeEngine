@@ -1,6 +1,5 @@
 package me.monstermaze.engine.play;
 
-import me.monstermaze.engine.ai.HeuristicAgent;
 import me.monstermaze.engine.api.*;
 import me.monstermaze.engine.audio.Sfx;
 import me.monstermaze.engine.game.EngineImpl;
@@ -16,7 +15,11 @@ import java.awt.image.BufferedImage;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Playable Monster Maze: camera, zoom, AI, SFX, minimap, end summary. */
+/**
+ * Local playable Monster Maze (human player only).
+ * AI training uses the same engine Action API from outside this UI
+ * (e.g. MonsterMazeAI) — not a separate in-game mode.
+ */
 public final class PlayFrame extends JFrame {
 
     private static final int VIEW = 520;
@@ -27,11 +30,9 @@ public final class PlayFrame extends JFrame {
     private final GamePanel panel;
     private final JLabel hud;
     private final Set<Integer> keys = ConcurrentHashMap.newKeySet();
-    private final HeuristicAgent agent = new HeuristicAgent();
     private float yaw = 0f;
     private double zoom = 2.2;
     private volatile boolean running = true;
-    private volatile boolean aiEnabled = false;
     private int peakStage = 0;
     private long runStartMs = System.currentTimeMillis();
     private boolean endShown = false;
@@ -41,7 +42,6 @@ public final class PlayFrame extends JFrame {
         int monsters = monsterOverride >= 0 ? monsterOverride : StageTimer.starterMonsters(mode);
         this.engine = new EngineImpl(monsters);
         this.state = engine.initialState(mode, layoutId, kit, seed);
-        this.agent.setGraph(engine.getWorkingGraph());
         this.renderer = new TopDownRenderer(6);
         this.panel = new GamePanel();
         this.hud = new JLabel(" ");
@@ -67,7 +67,6 @@ public final class PlayFrame extends JFrame {
                 if (code == KeyEvent.VK_EQUALS || code == KeyEvent.VK_ADD) zoom = Math.min(6.0, zoom + 0.25);
                 else if (code == KeyEvent.VK_MINUS || code == KeyEvent.VK_SUBTRACT) zoom = Math.max(0.8, zoom - 0.25);
                 else if (code == KeyEvent.VK_0) zoom = 2.2;
-                else if (code == KeyEvent.VK_F) aiEnabled = !aiEnabled;
                 else if (code == KeyEvent.VK_M) { sfxOn = !sfxOn; Sfx.setEnabled(sfxOn); }
             }
             @Override public void keyReleased(KeyEvent e) { keys.remove(e.getKeyCode()); }
@@ -75,8 +74,6 @@ public final class PlayFrame extends JFrame {
         setFocusable(true);
         requestFocusInWindow();
     }
-
-    public void setAiEnabled(boolean on) { this.aiEnabled = on; }
 
     public void startLoop() {
         Thread t = new Thread(() -> {
@@ -116,28 +113,22 @@ public final class PlayFrame extends JFrame {
             return;
         }
 
-        Action action;
-        if (aiEnabled) {
-            agent.setGraph(engine.getWorkingGraph());
-            action = agent.act(state);
-            yaw = action.yaw;
-        } else {
-            if (keys.contains(KeyEvent.VK_LEFT)) yaw -= 6f;
-            if (keys.contains(KeyEvent.VK_RIGHT)) yaw += 6f;
-            double moveX = 0, moveZ = 0;
-            if (keys.contains(KeyEvent.VK_W) || keys.contains(KeyEvent.VK_UP)) moveZ += 1;
-            if (keys.contains(KeyEvent.VK_S) || keys.contains(KeyEvent.VK_DOWN)) moveZ -= 1;
-            if (keys.contains(KeyEvent.VK_A)) moveX -= 1;
-            if (keys.contains(KeyEvent.VK_D)) moveX += 1;
-            action = new Action(moveX, moveZ,
-                    keys.contains(KeyEvent.VK_SHIFT),
-                    keys.contains(KeyEvent.VK_SPACE),
-                    keys.contains(KeyEvent.VK_SPACE),
-                    yaw, 0f,
-                    keys.contains(KeyEvent.VK_Q),
-                    keys.contains(KeyEvent.VK_E),
-                    null);
-        }
+        if (keys.contains(KeyEvent.VK_LEFT)) yaw -= 6f;
+        if (keys.contains(KeyEvent.VK_RIGHT)) yaw += 6f;
+        double moveX = 0, moveZ = 0;
+        if (keys.contains(KeyEvent.VK_W) || keys.contains(KeyEvent.VK_UP)) moveZ += 1;
+        if (keys.contains(KeyEvent.VK_S) || keys.contains(KeyEvent.VK_DOWN)) moveZ -= 1;
+        if (keys.contains(KeyEvent.VK_A)) moveX -= 1;
+        if (keys.contains(KeyEvent.VK_D)) moveX += 1;
+
+        Action action = new Action(moveX, moveZ,
+                keys.contains(KeyEvent.VK_SHIFT),
+                keys.contains(KeyEvent.VK_SPACE),
+                keys.contains(KeyEvent.VK_SPACE),
+                yaw, 0f,
+                keys.contains(KeyEvent.VK_Q),
+                keys.contains(KeyEvent.VK_E),
+                null);
 
         TickResult result = engine.tick(state, action);
         Sfx.playEvents(result.events);
@@ -163,9 +154,8 @@ public final class PlayFrame extends JFrame {
             if (p.abilityCooldownTicks > 0) sb.append(String.format("  %.1fs", p.abilityCooldownTicks / 20.0));
         }
         sb.append(String.format("  Mobs %d  %s  zoom %.1fx", s.monsters.size(), s.phase, zoom));
-        if (aiEnabled) sb.append("  [AI]");
         if (p.onSafePad) sb.append("  [PAD]");
-        sb.append("   F=AI  +/- zoom  M=mute");
+        sb.append("   +/- zoom  M=mute");
         return sb.toString();
     }
 
@@ -230,7 +220,6 @@ public final class PlayFrame extends JFrame {
             int layout = 0;
             int monsters = -1;
             long seed = System.currentTimeMillis();
-            boolean startAi = false;
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
                     case "--mode": mode = MazeMode.valueOf(args[++i].toUpperCase()); break;
@@ -244,11 +233,9 @@ public final class PlayFrame extends JFrame {
                     case "--layout": layout = Integer.parseInt(args[++i]); break;
                     case "--monsters": monsters = Integer.parseInt(args[++i]); break;
                     case "--seed": seed = Long.parseLong(args[++i]); break;
-                    case "--ai": startAi = true; break;
                 }
             }
             PlayFrame frame = new PlayFrame(mode, kit, layout, seed, monsters);
-            if (startAi) frame.setAiEnabled(true);
             frame.setVisible(true);
             frame.startLoop();
         });
