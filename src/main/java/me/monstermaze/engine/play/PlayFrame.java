@@ -113,8 +113,21 @@ public final class PlayFrame extends JFrame {
         setLocationRelativeTo(null);
 
         addWindowListener(new WindowAdapter() {
+            @Override public void windowActivated(WindowEvent e) {
+                SwingUtilities.invokeLater(() -> panel.requestFocusInWindow());
+            }
+
+            @Override public void windowDeactivated(WindowEvent e) {
+                // Prevent a held key from becoming a permanent input state when
+                // focus moves to another window (Alt+Tab, dialogs, desktop, etc.).
+                keys.clear();
+                abilityHeld = false;
+            }
+
             @Override public void windowClosed(WindowEvent e) {
                 running = false;
+                keys.clear();
+                abilityHeld = false;
                 if (mainMenu != null) mainMenu.returnFromGame();
             }
         });
@@ -122,7 +135,7 @@ public final class PlayFrame extends JFrame {
 
         panel.addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e) {
-                requestFocusInWindow();
+                panel.requestFocusInWindow();
                 dragging = true;
                 lastMouseX = e.getX();
                 lastMouseY = e.getY();
@@ -200,8 +213,8 @@ public final class PlayFrame extends JFrame {
      */
     private void installKeyBindings() {
         final java.awt.KeyEventDispatcher dispatcher = event -> {
-            Component source = event.getComponent();
-            if (source == null || SwingUtilities.getWindowAncestor(source) != PlayFrame.this) {
+            Window active = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
+            if (active != PlayFrame.this) {
                 return false;
             }
 
@@ -221,6 +234,7 @@ public final class PlayFrame extends JFrame {
                 java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
                         .removeKeyEventDispatcher(dispatcher);
                 keys.clear();
+                abilityHeld = false;
             }
         });
     }
