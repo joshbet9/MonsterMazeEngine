@@ -63,7 +63,7 @@ public final class PlayFrame extends JFrame {
         this.theme = UiTheme.of(this.config.darkMode);
         this.zoom = this.config.zoom;
         this.cameraDistance = 9.0 / Math.max(0.8, Math.min(6.0, this.zoom));
-        this.viewSize = this.config.windowSize;
+        this.viewSize = Math.max(900, this.config.windowSize);
         this.showHelp = this.config.showControlsHint;
         Sfx.setEnabled(this.config.sfxEnabled);
         theme.applyLookAndFeel();
@@ -140,7 +140,7 @@ public final class PlayFrame extends JFrame {
                 if (dx == 0 && dy == 0) return;
                 // Minecraft-style free look: ordinary mouse movement changes
                 // the camera. No click-and-drag gesture is required.
-                cameraYaw = normaliseYaw(cameraYaw + dx * 0.45f);
+                cameraYaw = normaliseYaw(cameraYaw - dx * 0.45f);
                 cameraPitch = clamp(cameraPitch - dy * 0.30f, -70.0f, 30.0f);
                 panel.repaint();
             }
