@@ -12,9 +12,7 @@ import me.monstermaze.engine.physics.PlayerPhysics18;
 import me.monstermaze.engine.util.SeededRandom;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Shared pure Monster Maze game engine.
