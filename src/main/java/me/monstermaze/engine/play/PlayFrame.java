@@ -139,12 +139,12 @@ public final class PlayFrame extends JFrame {
                 int dy = e.getY() - lastMouseY;
                 lastMouseX = e.getX();
                 lastMouseY = e.getY();
-                if (firstPerson) {
-                    state.player.yaw = normaliseYaw(state.player.yaw + dx * 0.45f);
-                    cameraYaw = state.player.yaw;
-                } else {
-                    cameraYaw = normaliseYaw(cameraYaw + dx * 0.45f);
-                }
+                // In Minecraft, horizontal camera heading and movement heading
+                // are the same control frame: W/A/S/D are evaluated relative to
+                // what the player is looking toward. Keep the third-person camera
+                // and player yaw coupled so rotating the view changes movement.
+                state.player.yaw = normaliseYaw(state.player.yaw + dx * 0.45f);
+                cameraYaw = state.player.yaw;
                 cameraPitch = clamp(cameraPitch - dy * 0.30f, -70.0f, 30.0f);
                 panel.repaint();
             }
@@ -278,6 +278,9 @@ public final class PlayFrame extends JFrame {
         TickResult result = engine.tick(state, action);
         Sfx.playEvents(result.events);
         state = result.next;
+        // Camera yaw follows the player's horizontal look direction; movement
+        // input is therefore always evaluated in the visible camera frame.
+        cameraYaw = state.player.yaw;
         if (state.stage > peakStage) peakStage = state.stage;
 
         final String l1 = formatLine1(state);
