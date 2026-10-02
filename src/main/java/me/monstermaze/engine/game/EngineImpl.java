@@ -35,8 +35,7 @@ public final class EngineImpl implements MonsterMazeEngine {
     private SeededRandom padRandom;
     private PlayerPhysics18 physics;
     private int nextMonsterId;
-    private final Map<String, Integer> oldPadDecay = new HashMap<>();
-
+ 
     public EngineImpl() {
         this(Coordinates.DEFAULT_CENTER_X, Coordinates.DEFAULT_CENTER_Y,
                 Coordinates.DEFAULT_CENTER_Z, -1);
@@ -72,8 +71,7 @@ public final class EngineImpl implements MonsterMazeEngine {
         padRandom = new SeededRandom(seed ^ PAD_SEED_XOR);
         physics = new PlayerPhysics18(graph, centerX, centerY, centerZ);
         nextMonsterId = 1;
-        oldPadDecay.clear();
-
+ 
         PlayerState player = new PlayerState(
                 new Vec3(Coordinates.pathCenterX(centerX, Layouts.HALF), centerY,
                         Coordinates.pathCenterZ(centerZ, Layouts.HALF)),
@@ -144,16 +142,20 @@ public final class EngineImpl implements MonsterMazeEngine {
                             || SafePadSimulator.isOn(state.previewPad, state.player.pos)
                             || onOldPad(state, state.player);
 
-            MonsterSimulator monsters = new MonsterSimulator(
-                    graph, centerX, centerY, centerZ, monsterRandom, 1.4, currentTick);
-            monsters.tick(state.monsters, currentTick);
-
+            // MonsterManager's movement/bump tick is gated on LIVE. Monsters may spawn
+            // during STARTING behind the source containment barrier, but they do not move
+            // or damage the player until LIVE.
             if (state.phase == GamePhase.LIVE) {
-                if (MonsterMazeBumpModel.apply(state) == 1) {
+                MonsterSimulator monsters = new MonsterSimulator(
+                        graph, centerX, centerY, centerZ, monsterRandom, 1.4, currentTick);
+                monsters.tick(state.monsters, currentTick);
+
+                int bumpResult = MonsterMazeBumpModel.apply(state);
+                if (bumpResult == MonsterMazeBumpModel.RESULT_NORMAL_HIT) {
                     events.add(new GameEvent(GameEventType.DAMAGE, 4.0));
-                    if (state.player.health > 0) {
-                        events.add(new GameEvent(GameEventType.KNOCKBACK, state.player.vel));
-                    }
+                    events.add(new GameEvent(GameEventType.KNOCKBACK, state.player.vel));
+                } else if (bumpResult == MonsterMazeBumpModel.RESULT_BODY_RUSH) {
+                    events.add(new GameEvent(GameEventType.ABILITY_USED, "body_rush_contact"));
                 }
             }
 
@@ -222,9 +224,12 @@ public final class EngineImpl implements MonsterMazeEngine {
                 && state.previewPad == null) {
             List<SafePadState> avoid = new ArrayList<>(state.oldPads);
             if (state.activePad != null) avoid.add(state.activePad);
+            if (state.previewPad != null) avoid.add(state.previewPad);
             state.previewPad = SafePadSimulator.previewPad(
                     graph, centerX, centerY, centerZ, padRandom, avoid);
             state.previewPadRequested = state.previewPad != null;
+            // Source removes any monster already standing on the newly built preview pad.
+            removeMonstersOnPad(state, state.previewPad);
         }
 
         tickOldPadDecay(state);
@@ -251,7 +256,7 @@ public final class EngineImpl implements MonsterMazeEngine {
     private void advanceStage(GameState state, List<GameEvent> events) {
         if (state.activePad != null) {
             state.oldPads.add(state.activePad);
-            oldPadDecay.put(padKey(state.activePad), 11);
+            state.oldPadDecaySeconds.put(padKey(state.activePad), 11);
         }
 
         state.stage++;
@@ -280,11 +285,9 @@ public final class EngineImpl implements MonsterMazeEngine {
         }
 
         int extra = StageTimer.monstersPerTransition(state.mode);
-        state.pendingMonsterSpawns += starterOverride >= 0
-                ? Math.min(extra, 10)
-                : extra;
+        int spawned = spawnTransitionBatch(state, extra);
         events.add(new GameEvent(GameEventType.STAGE_ADVANCE, state.stage));
-        events.add(new GameEvent(GameEventType.MONSTER_SPAWN, extra));
+        events.add(new GameEvent(GameEventType.MONSTER_SPAWN, spawned));
     }
 
     private void spawnInitialBatch(GameState state, List<GameEvent> events) {
@@ -319,6 +322,35 @@ public final class EngineImpl implements MonsterMazeEngine {
         return cells;
     }
 
+    /** Source spawnMore(): later waves use the layout's dedicated spawn markers (value 2). */
+    private int spawnTransitionBatch(GameState state, int count) {
+        if (count <= 0) return 0;
+        List<int[]> spawns = spawnCells();
+        if (spawns.isEmpty()) return 0;
+        int target = starterOverride >= 0 ? Math.min(count, 10) : count;
+        int spawned = 0;
+        for (int i = 0; i < target; i++) {
+            int[] cell = spawns.get(monsterRandom.nextInt(spawns.size()));
+            state.monsters.add(new MonsterState(
+                    nextMonsterId++,
+                    new Vec3(Coordinates.pathCenterX(centerX, cell[0]), centerY,
+                            Coordinates.pathCenterZ(centerZ, cell[1])),
+                    Vec3.ZERO, cell[0], cell[1], -1, false, 0));
+            spawned++;
+        }
+        return spawned;
+    }
+
+    private List<int[]> spawnCells() {
+        List<int[]> cells = new ArrayList<>();
+        for (int r = 0; r < Layouts.SIZE; r++) {
+            for (int c = 0; c < Layouts.SIZE; c++) {
+                if (Layouts.isSpawn(graph.raw(r, c))) cells.add(new int[]{r, c});
+            }
+        }
+        return cells;
+    }
+
     private void removeMonstersOnPad(GameState state, SafePadState pad) {
         for (MonsterState m : state.monsters) {
             if (m.removed) continue;
@@ -331,16 +363,16 @@ public final class EngineImpl implements MonsterMazeEngine {
         List<SafePadState> expired = new ArrayList<>();
         for (SafePadState pad : state.oldPads) {
             String key = padKey(pad);
-            int left = oldPadDecay.getOrDefault(key, 11) - 1;
+            int left = state.oldPadDecaySeconds.getOrDefault(key, 11) - 1;
             if (left <= 0) {
                 expired.add(pad);
             } else {
-                oldPadDecay.put(key, left);
+                state.oldPadDecaySeconds.put(key, left);
             }
         }
         for (SafePadState pad : expired) {
             state.oldPads.remove(pad);
-            oldPadDecay.remove(padKey(pad));
+            state.oldPadDecaySeconds.remove(padKey(pad));
             SafePadSimulator.decayOldPad(graph, centerX, centerZ, pad);
         }
     }
