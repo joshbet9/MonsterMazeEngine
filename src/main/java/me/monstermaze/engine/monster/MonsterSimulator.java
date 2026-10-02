@@ -17,9 +17,16 @@ import java.util.List;
  */
 public final class MonsterSimulator {
     private static final double WAYPOINT_TOLERANCE = 0.4;
-    private static final double SNOWMAN_MOVEMENT_SPEED = 0.20000000298023224D;
-    private static final double GROUND_SLIPPERINESS = 0.6D;
-    private static final double GROUND_FRICTION = GROUND_SLIPPERINESS * 0.91D;
+    /*
+     * CreatureMoveFast's public 1.4 value is a controller input, not blocks/tick.
+     * The current 1.21 Monster Maze controller realizes movement with a 0.175
+     * conversion after its 0.8 move command, i.e. 0.14 blocks/tick (~2.8 b/s).
+     * Keep the common simulator on that realized scale rather than integrating
+     * the command as raw velocity. This also prevents artificial acceleration
+     * from making mobs many times faster than the real game.
+     */
+    private static final double REALIZED_MOVE_SCALE = 0.10D;
+    private static final double MAX_REALIZED_MOVE_PER_TICK = 0.14D;
     private static final double GRAVITY = 0.08D;
     private static final double AIR_DRAG = 0.9800000190734863D;
     private final MazeGraph maze;
@@ -88,17 +95,17 @@ public final class MonsterSimulator {
             float currentYaw = m.direction < 0 ? desiredYaw : yawFromDirection(m.direction);
             float yaw = approachAngle(currentYaw, desiredYaw, 30.0F);
 
-            double movementInput = speed * SNOWMAN_MOVEMENT_SPEED;
+            double movementInput = Math.min(MAX_REALIZED_MOVE_PER_TICK, speed * REALIZED_MOVE_SCALE);
             double rad = Math.toRadians(yaw);
             double fx = -Math.sin(rad);
             double fz = Math.cos(rad);
 
-            double vx = m.vel.x + fx * movementInput;
-            double vz = m.vel.z + fz * movementInput;
+            double vx = fx * movementInput;
+            double vz = fz * movementInput;
             double nx = m.pos.x + vx;
             double nz = m.pos.z + vz;
 
-            m.vel = new Vec3(vx * GROUND_FRICTION, 0.0, vz * GROUND_FRICTION);
+            m.vel = new Vec3(vx, 0.0, vz);
             if (!hasPhysicalSupport(nx, nz)) {
                 m.pos = new Vec3(nx, centerY - 0.08D, nz);
             } else {
