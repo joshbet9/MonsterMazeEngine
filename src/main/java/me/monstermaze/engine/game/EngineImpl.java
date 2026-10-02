@@ -137,6 +137,15 @@ public final class EngineImpl implements MonsterMazeEngine {
 
             physics.tick(state.player, action, jumpAmplifier);
 
+            // Source GameManager eliminates a player once they fall more than
+            // three blocks below the maze centre/floor.
+            if (state.player.pos.y < centerY - 3.0) {
+                state.alive = false;
+                state.phase = GamePhase.ENDING;
+                state.inMonsterMaze = false;
+                events.add(new GameEvent(GameEventType.ELIMINATED, "fell_off_maze"));
+            }
+
             state.player.onSafePad =
                     SafePadSimulator.isOn(state.activePad, state.player.pos)
                             || SafePadSimulator.isOn(state.previewPad, state.player.pos)
