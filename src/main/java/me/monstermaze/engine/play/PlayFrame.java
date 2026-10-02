@@ -200,7 +200,10 @@ public final class PlayFrame extends JFrame {
      */
     private void installKeyBindings() {
         final java.awt.KeyEventDispatcher dispatcher = event -> {
-            if (event.getWindow() != PlayFrame.this) return false;
+            Component source = event.getComponent();
+            if (source == null || SwingUtilities.getWindowAncestor(source) != PlayFrame.this) {
+                return false;
+            }
 
             int code = event.getKeyCode();
             if (event.getID() == KeyEvent.KEY_PRESSED) {
