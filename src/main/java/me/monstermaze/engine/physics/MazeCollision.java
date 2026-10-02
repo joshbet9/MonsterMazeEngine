@@ -31,6 +31,24 @@ public final class MazeCollision {
         return centerY;
     }
 
+    public boolean hasPhysicalFloor(double x, double z) {
+        final double halfWidth = PLAYER_WIDTH / 2.0;
+        final double minX = x - halfWidth;
+        final double maxX = x + halfWidth;
+        final double minZ = z - halfWidth;
+        final double maxZ = z + halfWidth;
+        int minRow = Coordinates.layoutRow(centerX, (int) Math.floor(minX));
+        int maxRow = Coordinates.layoutRow(centerX, (int) Math.floor(Math.nextDown(maxX)));
+        int minCol = Coordinates.layoutCol(centerZ, (int) Math.floor(minZ));
+        int maxCol = Coordinates.layoutCol(centerZ, (int) Math.floor(Math.nextDown(maxZ)));
+        for (int r = minRow; r <= maxRow; r++) {
+            for (int c = minCol; c <= maxCol; c++) {
+                if (maze.isPhysicalFloor(r, c)) return true;
+            }
+        }
+        return false;
+    }
+
     public void move(PlayerState p, double dx, double dy, double dz) {
         Aabb original = playerBox(p);
         List<Aabb> boxes = colliders(original.expand(Math.abs(dx), Math.abs(dy), Math.abs(dz)));
