@@ -132,18 +132,23 @@ public final class PlayFrame extends JFrame {
             }
         });
         panel.addMouseMotionListener(new MouseMotionAdapter() {
-            @Override public void mouseDragged(MouseEvent e) {
-                if (!dragging) return;
+            private void updateCamera(MouseEvent e) {
                 int dx = e.getX() - lastMouseX;
                 int dy = e.getY() - lastMouseY;
                 lastMouseX = e.getX();
                 lastMouseY = e.getY();
-                // Camera heading is the movement heading, as in Minecraft.
-                // Do not mutate the shared simulation state from the Swing EDT;
-                // the tick thread consumes cameraYaw and applies it atomically.
+                if (dx == 0 && dy == 0) return;
+                // Minecraft-style free look: ordinary mouse movement changes
+                // the camera. No click-and-drag gesture is required.
                 cameraYaw = normaliseYaw(cameraYaw + dx * 0.45f);
                 cameraPitch = clamp(cameraPitch - dy * 0.30f, -70.0f, 30.0f);
                 panel.repaint();
+            }
+            @Override public void mouseMoved(MouseEvent e) {
+                updateCamera(e);
+            }
+            @Override public void mouseDragged(MouseEvent e) {
+                updateCamera(e);
             }
         });
         panel.addMouseWheelListener(e -> {
@@ -324,9 +329,10 @@ public final class PlayFrame extends JFrame {
         if (keys.contains(KeyEvent.VK_A)) strafe -= 1.0;
         if (keys.contains(KeyEvent.VK_D)) strafe += 1.0;
 
-        boolean jump = keys.contains(KeyEvent.VK_SPACE)
-                && state.player.kit == KitType.JUMPER
-                && state.player.jumpCharges > 0;
+        // Keep jump input available to every kit. The engine's Jump Boost -10
+        // state suppresses vertical motion for jumpless/exhausted kits while
+        // preserving the sprint horizontal impulse used for speeding.
+        boolean jump = keys.contains(KeyEvent.VK_SPACE);
         boolean abilityKeyDown = keys.contains(KeyEvent.VK_Q) || keys.contains(KeyEvent.VK_E);
         boolean ability = abilityKeyDown && !abilityHeld;
         abilityHeld = abilityKeyDown;
@@ -455,7 +461,7 @@ public final class PlayFrame extends JFrame {
             String[] lines = {
                     "WASD move   Arrows turn   Space jump   Shift sprint",
                     "Q primary   E enhanced   P pause   F first-person",
-                    "Drag mouse camera   Wheel/[ ] distance   H help   Esc menu"
+                    "Move mouse camera   Wheel/[ ] distance   H help   Esc menu"
             };
             int pad = 10, lineH = 16, w = 420;
             int h = lines.length * lineH + pad * 2;
