@@ -1,39 +1,30 @@
 # MonsterMazeEngine
 
-Pure, headless **1.8-accurate** Monster Maze sim + local playable game.
+Pure **1.8-accurate** Monster Maze sim + local playable game.
 
-- No Bukkit / NMS
-- Deterministic 20 TPS engine
+- No Bukkit / NMS · deterministic 20 TPS
 - Kits: Jumper, Body Builder, Slowballer, Repulsor, Maverick
-- Swing play window + CSV traces + PNG renderer
+- Main menu + settings GUI (persistent config)
 
 ## Play
 
 ```bash
 mvn -q package
-java -cp target/classes me.monstermaze.engine.play.PlayMenu
+java -cp target/classes me.monstermaze.engine.play.MainMenu
+# or:
+java -jar target/monstermaze-engine-0.1.0-SNAPSHOT.jar
 ```
 
-Or skip the menu:
+**Main menu:** Play · Settings · Quit  
+**Settings:** kit, mode, layout, mobs, seed, zoom, window size, SFX  
+Config file: `~/.monstermaze-engine.properties`
 
-```bash
-java -cp target/classes me.monstermaze.engine.play.PlayFrame \
-  --kit JUMPER --mode ORIGINAL --layout 0 --monsters 40
-```
+**In-game:** WASD · arrows · Space · Shift · Q/E · `+/-` zoom · `M` mute · **Esc** back to menu
 
-**Controls:** WASD move · arrows turn · Space jump · Shift sprint · Q primary · E enhanced
-
-## Headless sim / traces
+## Headless sim
 
 ```bash
 java -cp target/classes me.monstermaze.engine.cli.SimMain 400 sim-out
-```
-
-## Structure
-
-```
-api/ game/ maze/ physics/ monster/ kit/ pad/
-trace/ render/ play/ cli/
 ```
 
 ## License
