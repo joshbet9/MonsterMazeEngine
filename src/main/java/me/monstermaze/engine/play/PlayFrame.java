@@ -5,12 +5,14 @@ import me.monstermaze.engine.audio.Sfx;
 import me.monstermaze.engine.game.EngineImpl;
 import me.monstermaze.engine.game.StageTimer;
 import me.monstermaze.engine.maze.Layouts;
-import me.monstermaze.engine.render.TopDownRenderer;
+import me.monstermaze.engine.render.PerspectiveRenderer;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseMotionAdapter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
@@ -22,7 +24,7 @@ public final class PlayFrame extends JFrame {
 
     private final EngineImpl engine;
     private GameState state;
-    private final TopDownRenderer renderer;
+    private final PerspectiveRenderer renderer;
     private final GamePanel panel;
     private final JPanel hudBar;
     private final JLabel hudLine1;
@@ -33,6 +35,13 @@ public final class PlayFrame extends JFrame {
     private final MainMenu mainMenu;
     private final UiTheme theme;
     private double zoom;
+    private boolean firstPerson;
+    private volatile float cameraYaw;
+    private float cameraPitch = -18.0f;
+    private double cameraDistance = 9.0;
+    private int lastMouseX;
+    private int lastMouseY;
+    private boolean dragging;
     private final int viewSize;
     private volatile boolean running = true;
     private volatile boolean paused = false;
@@ -53,7 +62,8 @@ public final class PlayFrame extends JFrame {
         this.mainMenu = mainMenu;
         this.theme = UiTheme.of(this.config.darkMode);
         this.zoom = this.config.zoom;
-        this.viewSize = this.config.windowSize;
+        this.cameraDistance = 9.0 / Math.max(0.8, Math.min(6.0, this.zoom));
+        this.viewSize = Math.max(900, this.config.windowSize);
         this.showHelp = this.config.showControlsHint;
         Sfx.setEnabled(this.config.sfxEnabled);
         theme.applyLookAndFeel();
@@ -61,7 +71,8 @@ public final class PlayFrame extends JFrame {
         int monsters = monsterOverride >= 0 ? monsterOverride : StageTimer.starterMonsters(mode);
         this.engine = new EngineImpl(monsters);
         this.state = engine.initialState(mode, layoutId, kit, seed);
-        this.renderer = new TopDownRenderer(6);
+        this.renderer = new PerspectiveRenderer();
+        this.cameraYaw = state.player.yaw;
         this.panel = new GamePanel();
 
         hudLine1 = new JLabel(" ");
@@ -102,46 +113,71 @@ public final class PlayFrame extends JFrame {
         setLocationRelativeTo(null);
 
         addWindowListener(new WindowAdapter() {
+            @Override public void windowActivated(WindowEvent e) {
+                SwingUtilities.invokeLater(() -> panel.requestFocusInWindow());
+            }
+
+            @Override public void windowDeactivated(WindowEvent e) {
+                // Prevent a held key from becoming a permanent input state when
+                // focus moves to another window (Alt+Tab, dialogs, desktop, etc.).
+                keys.clear();
+                abilityHeld = false;
+            }
+
             @Override public void windowClosed(WindowEvent e) {
                 running = false;
+                keys.clear();
+                abilityHeld = false;
                 if (mainMenu != null) mainMenu.returnFromGame();
             }
         });
 
-        addKeyListener(new KeyAdapter() {
-            private boolean sfxOn = PlayFrame.this.config.sfxEnabled;
-            @Override public void keyPressed(KeyEvent e) {
-                int code = e.getKeyCode();
-                if (code == KeyEvent.VK_ESCAPE) {
-                    if (paused || state.phase == GamePhase.ENDING) {
-                        running = false;
-                        dispose();
-                    } else {
-                        paused = true;
-                        panel.repaint();
-                    }
-                    return;
-                }
-                if (code == KeyEvent.VK_P) {
-                    paused = !paused;
-                    panel.repaint();
-                    return;
-                }
-                if (code == KeyEvent.VK_H) {
-                    showHelp = !showHelp;
-                    panel.repaint();
-                    return;
-                }
-                if (code == KeyEvent.VK_EQUALS || code == KeyEvent.VK_ADD) zoom = Math.min(6.0, zoom + 0.25);
-                else if (code == KeyEvent.VK_MINUS || code == KeyEvent.VK_SUBTRACT) zoom = Math.max(0.8, zoom - 0.25);
-                else if (code == KeyEvent.VK_0) zoom = PlayFrame.this.config.zoom;
-                else if (code == KeyEvent.VK_M) { sfxOn = !sfxOn; Sfx.setEnabled(sfxOn); }
-                keys.add(code);
+
+        panel.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) {
+                panel.requestFocusInWindow();
+                dragging = true;
+                lastMouseX = e.getX();
+                lastMouseY = e.getY();
             }
-            @Override public void keyReleased(KeyEvent e) { keys.remove(e.getKeyCode()); }
+            @Override public void mouseReleased(MouseEvent e) {
+                dragging = false;
+            }
         });
+        panel.addMouseMotionListener(new MouseMotionAdapter() {
+            private void updateCamera(MouseEvent e) {
+                int dx = e.getX() - lastMouseX;
+                int dy = e.getY() - lastMouseY;
+                lastMouseX = e.getX();
+                lastMouseY = e.getY();
+                if (dx == 0 && dy == 0) return;
+                // Minecraft-style free look: ordinary mouse movement changes
+                // the camera. No click-and-drag gesture is required.
+                cameraYaw = normaliseYaw(cameraYaw - dx * 0.45f);
+                cameraPitch = clamp(cameraPitch - dy * 0.30f, -70.0f, 30.0f);
+                panel.repaint();
+            }
+            @Override public void mouseMoved(MouseEvent e) {
+                updateCamera(e);
+            }
+            @Override public void mouseDragged(MouseEvent e) {
+                updateCamera(e);
+            }
+        });
+        panel.addMouseWheelListener(e -> {
+            cameraDistance = clamp(cameraDistance + e.getPreciseWheelRotation(), 4.0, 18.0);
+            panel.repaint();
+        });
+
+        installKeyBindings();
+        panel.setFocusable(true);
+        panel.setFocusTraversalKeysEnabled(false);
         setFocusable(true);
-        requestFocusInWindow();
+        SwingUtilities.invokeLater(() -> {
+            toFront();
+            requestFocus();
+            panel.requestFocusInWindow();
+        });
     }
 
     public void startLoop() {
@@ -165,6 +201,44 @@ public final class PlayFrame extends JFrame {
         t.start();
     }
 
+    /**
+     * Use Swing's window-scoped key bindings rather than a JFrame KeyListener.
+     * A JFrame is not normally the focused component after the game panel is
+     * clicked, so the old listener could silently stop receiving W/A/S/D.
+     */
+    /**
+     * Track physical keyboard state at the AWT level. Unlike Swing key bindings,
+     * this receives both press and release events for modifier keys such as Shift
+     * regardless of which child component currently owns focus.
+     */
+    private void installKeyBindings() {
+        final java.awt.KeyEventDispatcher dispatcher = event -> {
+            Window active = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
+            if (active != PlayFrame.this) {
+                return false;
+            }
+
+            int code = event.getKeyCode();
+            if (event.getID() == KeyEvent.KEY_PRESSED) {
+                keys.add(code);
+            } else if (event.getID() == KeyEvent.KEY_RELEASED) {
+                keys.remove(code);
+            }
+            return false;
+        };
+        java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                .addKeyEventDispatcher(dispatcher);
+
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowClosed(WindowEvent e) {
+                java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                        .removeKeyEventDispatcher(dispatcher);
+                keys.clear();
+                abilityHeld = false;
+            }
+        });
+    }
+
     private void tickOnce() {
         if (state.phase == GamePhase.ENDING) {
             if (!endShown) {
@@ -184,9 +258,13 @@ public final class PlayFrame extends JFrame {
             return;
         }
 
+        if (keys.contains(KeyEvent.VK_LEFT)) cameraYaw = normaliseYaw(cameraYaw - 6.0f);
+        if (keys.contains(KeyEvent.VK_RIGHT)) cameraYaw = normaliseYaw(cameraYaw + 6.0f);
+
+        // The rendered camera and the player's horizontal look direction share
+        // one heading. This makes W/A/S/D evaluate relative to the camera.
+        state.player.yaw = cameraYaw;
         float yawDelta = 0.0f;
-        if (keys.contains(KeyEvent.VK_LEFT)) yawDelta -= 6.0f;
-        if (keys.contains(KeyEvent.VK_RIGHT)) yawDelta += 6.0f;
 
         double strafe = 0.0, forward = 0.0;
         if (keys.contains(KeyEvent.VK_W) || keys.contains(KeyEvent.VK_UP)) forward += 1.0;
@@ -194,6 +272,9 @@ public final class PlayFrame extends JFrame {
         if (keys.contains(KeyEvent.VK_A)) strafe -= 1.0;
         if (keys.contains(KeyEvent.VK_D)) strafe += 1.0;
 
+        // Keep jump input available to every kit. The engine's Jump Boost -10
+        // state suppresses vertical motion for jumpless/exhausted kits while
+        // preserving the sprint horizontal impulse used for speeding.
         boolean jump = keys.contains(KeyEvent.VK_SPACE);
         boolean abilityKeyDown = keys.contains(KeyEvent.VK_Q) || keys.contains(KeyEvent.VK_E);
         boolean ability = abilityKeyDown && !abilityHeld;
@@ -201,7 +282,7 @@ public final class PlayFrame extends JFrame {
         me.monstermaze.engine.api.Action action = new me.monstermaze.engine.api.Action(
                 forward, strafe,
                 jump,
-                keys.contains(KeyEvent.VK_SHIFT),
+                keys.contains(KeyEvent.VK_W) || keys.contains(KeyEvent.VK_UP) || keys.contains(KeyEvent.VK_SHIFT),
                 yawDelta,
                 ability
         );
@@ -209,6 +290,7 @@ public final class PlayFrame extends JFrame {
         TickResult result = engine.tick(state, action);
         Sfx.playEvents(result.events);
         state = result.next;
+        cameraYaw = state.player.yaw;
         if (state.stage > peakStage) peakStage = state.stage;
 
         final String l1 = formatLine1(state);
@@ -226,7 +308,8 @@ public final class PlayFrame extends JFrame {
 
     private String formatLine1(GameState s) {
         return String.format("  Stage %d  \u00b7  peak %d  \u00b7  %ds  \u00b7  %s  \u00b7  %s",
-                s.stage, peakStage, s.phaseTimerTicks / 20, displayKit(s.player.kit), s.phase);
+                s.stage, peakStage, s.phaseTimerTicks / 20, displayKit(s.player.kit), s.phase,
+                firstPerson ? "1P" : "3P");
     }
 
     private String formatLine2(GameState s) {
@@ -272,8 +355,9 @@ public final class PlayFrame extends JFrame {
             super.paintComponent(g0);
             Graphics2D g = (Graphics2D) g0;
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            BufferedImage img = renderer.renderCamera(state, getSize(), zoom);
-            g.drawImage(img, 0, 0, null);
+            PerspectiveRenderer.BufferedFrame frame =
+                    renderer.render(state, getSize(), firstPerson, cameraYaw, cameraPitch, cameraDistance);
+            g.drawImage(frame.image(), 0, 0, null);
             drawMinimap(g);
             if (showHelp) drawHelp(g);
             if (paused) drawPause(g);
@@ -319,8 +403,8 @@ public final class PlayFrame extends JFrame {
         private void drawHelp(Graphics2D g) {
             String[] lines = {
                     "WASD move   Arrows turn   Space jump   Shift sprint",
-                    "Q primary   E enhanced   +/- zoom   M mute",
-                    "P pause   H hide help   Esc pause / menu"
+                    "Q primary   E enhanced   P pause   F first-person",
+                    "Move mouse camera   Wheel/[ ] distance   H help   Esc menu"
             };
             int pad = 10, lineH = 16, w = 420;
             int h = lines.length * lineH + pad * 2;
@@ -358,6 +442,20 @@ public final class PlayFrame extends JFrame {
             FontMetrics fm = g.getFontMetrics();
             g.drawString(msg, (getWidth() - fm.stringWidth(msg)) / 2, getHeight() / 2);
         }
+    }
+
+    private static float normaliseYaw(float yaw) {
+        while (yaw >= 180.0f) yaw -= 360.0f;
+        while (yaw < -180.0f) yaw += 360.0f;
+        return yaw;
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     public static void main(String[] args) {

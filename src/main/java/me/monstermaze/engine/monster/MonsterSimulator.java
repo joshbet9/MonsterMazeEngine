@@ -17,9 +17,16 @@ import java.util.List;
  */
 public final class MonsterSimulator {
     private static final double WAYPOINT_TOLERANCE = 0.4;
-    private static final double SNOWMAN_MOVEMENT_SPEED = 0.20000000298023224D;
-    private static final double GROUND_SLIPPERINESS = 0.6D;
-    private static final double GROUND_FRICTION = GROUND_SLIPPERINESS * 0.91D;
+    /*
+     * CreatureMoveFast's public 1.4 value is a controller input, not blocks/tick.
+     * The current 1.21 Monster Maze controller realizes movement with a 0.175
+     * conversion after its 0.8 move command, i.e. 0.14 blocks/tick (~2.8 b/s).
+     * Keep the common simulator on that realized scale rather than integrating
+     * the command as raw velocity. This also prevents artificial acceleration
+     * from making mobs many times faster than the real game.
+     */
+    private static final double REALIZED_MOVE_SCALE = 0.10D;
+    private static final double MAX_REALIZED_MOVE_PER_TICK = 0.14D;
     private static final double GRAVITY = 0.08D;
     private static final double AIR_DRAG = 0.9800000190734863D;
     private final MazeGraph maze;
@@ -53,7 +60,8 @@ public final class MonsterSimulator {
             if (m.pos.y < centerY) {
                 int row = nearestRow(m.pos.x);
                 int col = nearestColumn(m.pos.z);
-                if (Coordinates.inBounds(row, col) && maze.isRawPath(row, col)) {
+                if (Coordinates.inBounds(row, col) && maze.isRawPath(row, col)
+                        && !maze.hasPadSurface(row, col)) {
                     m.pos = new Vec3(Coordinates.pathCenterX(centerX, row), centerY,
                             Coordinates.pathCenterZ(centerZ, col));
                     m.vel = Vec3.ZERO;
@@ -62,9 +70,39 @@ public final class MonsterSimulator {
                 }
             }
 
+            // Treat the active/preview Safe Pad footprint as a hard
+            // exclusion for the monster's full 0.7-block body, not just its
+            // center cell. If a mob is already overlapping the pad, find an
+            // adjacent traversable escape direction instead of allowing it to
+            // remain visually on the pad.
+            if (overlapsPadSurface(m.pos.x, m.pos.z)) {
+                int row = nearestRow(m.pos.x);
+                int col = nearestColumn(m.pos.z);
+                int[] exit = findPadExit(row, col);
+                if (exit == null) {
+                    m.removed = true;
+                    m.vel = Vec3.ZERO;
+                    continue;
+                }
+                m.targetWaypointX = exit[0];
+                m.targetWaypointZ = exit[1];
+                m.direction = directionFromDelta(exit[0] - row, exit[1] - col);
+            }
+
             int tr = m.targetWaypointX;
             int tc = m.targetWaypointZ;
-            if (tr < 0 || tc < 0 || atWaypoint(m)) {
+
+            // A Safe Pad disables monster waypoints immediately. Invalidate any
+            // stale target selected before the pad appeared so an existing route
+            // cannot carry the mob through the pad.
+            if (tr >= 0 && tc >= 0 && !maze.isTraversable(tr, tc)) {
+                m.targetWaypointX = -1;
+                m.targetWaypointZ = -1;
+                m.direction = -1;
+                tr = tc = -1;
+            }
+
+            if (tr < 0 || tc < 0) {
                 int row = nearestRow(m.pos.x);
                 int col = nearestColumn(m.pos.z);
                 if (Coordinates.inBounds(row, col) && maze.isTraversable(row, col)) {
@@ -75,34 +113,87 @@ public final class MonsterSimulator {
                 } else {
                     continue;
                 }
+            } else if (atWaypoint(m)) {
+                // Snap to the actual waypoint centre before making the next
+                // source-style random cardinal choice.
+                m.pos = new Vec3(
+                        Coordinates.pathCenterX(centerX, tr),
+                        centerY,
+                        Coordinates.pathCenterZ(centerZ, tc));
+                int[] next = chooseNextWaypoint(m, tr, tc);
+                if (next == null) continue;
+                tr = next[0];
+                tc = next[1];
             }
 
-            double tx = Coordinates.pathCenterX(centerX, tr);
-            double tz = Coordinates.pathCenterZ(centerZ, tc);
-            double dx = tx - m.pos.x;
-            double dz = tz - m.pos.z;
-            double dist = Math.hypot(dx, dz);
-            if (dist < 1e-9) continue;
+            // Keep monsters locked to their selected cardinal lane. The source
+            // waypoint graph chooses a cardinal direction; do not steer directly
+            // toward a distant target with a diagonal vector, which can cut across
+            // corners or carry a mob over a gap.
+            int dir = m.direction;
+            if (dir < 0) {
+                dir = directionFromDelta(tr - nearestRow(m.pos.x), tc - nearestColumn(m.pos.z));
+                m.direction = dir;
+            }
 
-            float desiredYaw = (float) (Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0F;
-            float currentYaw = m.direction < 0 ? desiredYaw : yawFromDirection(m.direction);
-            float yaw = approachAngle(currentYaw, desiredYaw, 30.0F);
+            double movementInput = Math.min(MAX_REALIZED_MOVE_PER_TICK, speed * REALIZED_MOVE_SCALE);
+            double vx = 0.0;
+            double vz = 0.0;
+            switch (dir) {
+                case 0 -> vx = -movementInput;
+                case 1 -> vz = movementInput;
+                case 2 -> vx = movementInput;
+                case 3 -> vz = -movementInput;
+                default -> {
+                    continue;
+                }
+            }
 
-            double movementInput = speed * SNOWMAN_MOVEMENT_SPEED;
-            double rad = Math.toRadians(yaw);
-            double fx = -Math.sin(rad);
-            double fz = Math.cos(rad);
-
-            double vx = m.vel.x + fx * movementInput;
-            double vz = m.vel.z + fz * movementInput;
             double nx = m.pos.x + vx;
             double nz = m.pos.z + vz;
 
-            m.vel = new Vec3(vx * GROUND_FRICTION, 0.0, vz * GROUND_FRICTION);
+            int currentRow = nearestRow(m.pos.x);
+            int currentCol = nearestColumn(m.pos.z);
+            int nextRow = nearestRow(nx);
+            int nextCol = nearestColumn(nz);
+
+            // A monster route is allowed to occupy only live path cells with
+            // real physical floor. This explicitly prevents crossing empty gaps
+            // and prevents entering a Safe Pad surface.
+            if (!Coordinates.inBounds(nextRow, nextCol)
+                    || !maze.isTraversable(nextRow, nextCol)
+                    || maze.hasPadSurface(nextRow, nextCol)
+                    || !maze.isPhysicalFloor(nextRow, nextCol)) {
+                m.vel = Vec3.ZERO;
+
+                // If the attempted step reaches a new cell, abandon the stale
+                // route and make a fresh route choice from the current cell.
+                if (nextRow != currentRow || nextCol != currentCol) {
+                    m.targetWaypointX = -1;
+                    m.targetWaypointZ = -1;
+                    m.direction = -1;
+                }
+                continue;
+            }
+
+            // Never allow the full 0.7-wide body to leave physical floor while
+            // moving around a corner.
             if (!hasPhysicalSupport(nx, nz)) {
-                m.pos = new Vec3(nx, centerY - 0.08D, nz);
-            } else {
-                m.pos = new Vec3(nx, centerY, nz);
+                m.vel = Vec3.ZERO;
+                continue;
+            }
+
+            m.vel = new Vec3(vx, 0.0, vz);
+            m.pos = new Vec3(nx, centerY, nz);
+
+            // Keep the Safe Pad as a hard monster exclusion zone for the whole
+            // body, not just its centre cell.
+            if (overlapsPadSurface(m.pos.x, m.pos.z)) {
+                m.pos = new Vec3(m.pos.x - vx, centerY, m.pos.z - vz);
+                m.vel = Vec3.ZERO;
+                m.targetWaypointX = -1;
+                m.targetWaypointZ = -1;
+                m.direction = -1;
             }
         }
     }
@@ -168,6 +259,44 @@ public final class MonsterSimulator {
         } else if (tick - m.launchedAtTick >= 30) {
             m.removed = true;
         }
+    }
+
+    private boolean overlapsPadSurface(double x, double z) {
+        final double halfWidth = 0.35D;
+        double minX = x - halfWidth, maxX = x + halfWidth;
+        double minZ = z - halfWidth, maxZ = z + halfWidth;
+        int minRow = nearestRow(minX);
+        int maxRow = nearestRow(Math.nextDown(maxX));
+        int minCol = nearestColumn(minZ);
+        int maxCol = nearestColumn(Math.nextDown(maxZ));
+
+        for (int r = minRow; r <= maxRow; r++) {
+            for (int c = minCol; c <= maxCol; c++) {
+                if (Coordinates.inBounds(r, c) && maze.hasPadSurface(r, c)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private int[] findPadExit(int row, int col) {
+        if (!Coordinates.inBounds(row, col)) return null;
+        List<int[]> exits = maze.traversableCardinals(row, col);
+        if (exits.isEmpty()) return null;
+
+        // Deterministic selection avoids consuming the movement RNG just to
+        // escape a newly placed pad.
+        int[] best = exits.get(0);
+        for (int[] candidate : exits) {
+            if (Math.abs(candidate[0] - Layouts.HALF)
+                    + Math.abs(candidate[1] - Layouts.HALF)
+                    > Math.abs(best[0] - Layouts.HALF)
+                    + Math.abs(best[1] - Layouts.HALF)) {
+                best = candidate;
+            }
+        }
+        return best;
     }
 
     private boolean hasPhysicalSupport(double x, double z) {

@@ -22,7 +22,7 @@ public final class GameConfig {
     public int monsters = 150;
     public double zoom = 2.2;
     public boolean sfxEnabled = true;
-    public int windowSize = 520;
+    public int windowSize = 900;
     public long lastSeed = 0;
     public boolean darkMode = true;
     public boolean showControlsHint = true;
@@ -40,7 +40,7 @@ public final class GameConfig {
             c.monsters = Integer.parseInt(p.getProperty("monsters", "150"));
             c.zoom = Double.parseDouble(p.getProperty("zoom", "2.2"));
             c.sfxEnabled = Boolean.parseBoolean(p.getProperty("sfxEnabled", "true"));
-            c.windowSize = Integer.parseInt(p.getProperty("windowSize", "520"));
+            c.windowSize = Math.max(900, Integer.parseInt(p.getProperty("windowSize", "900")));
             c.lastSeed = Long.parseLong(p.getProperty("lastSeed", "0"));
             c.darkMode = Boolean.parseBoolean(p.getProperty("darkMode", "true"));
             c.showControlsHint = Boolean.parseBoolean(p.getProperty("showControlsHint", "true"));
