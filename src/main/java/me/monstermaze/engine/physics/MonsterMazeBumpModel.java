@@ -14,6 +14,9 @@ public final class MonsterMazeBumpModel {
     public static final double CONTACT_DISTANCE = 1.0;
     public static final double DAMAGE = 4.0;
     public static final long HIT_COOLDOWN_TICKS = 20L;
+    public static final int RESULT_NONE = 0;
+    public static final int RESULT_NORMAL_HIT = 1;
+    public static final int RESULT_BODY_RUSH = 2;
 
     private MonsterMazeBumpModel() {}
 
@@ -28,7 +31,7 @@ public final class MonsterMazeBumpModel {
             if (KitSimulator.bodyRushActive(p, game.tick)) {
                 launchMonsterAway(m, p, game.tick);
                 KitSimulator.consumeBodyRushContact(p, game.tick);
-                return 1;
+                return RESULT_BODY_RUSH;
             }
 
             boolean wasGrounded = p.onGround;
@@ -70,7 +73,7 @@ public final class MonsterMazeBumpModel {
             p.damageTaken += DAMAGE;
             p.hitCooldownTicks = (int) HIT_COOLDOWN_TICKS;
             p.mobHitGraceUntilTick = game.tick + 40L;
-            return 1;
+            return RESULT_NORMAL_HIT;
         }
         return 0;
     }
