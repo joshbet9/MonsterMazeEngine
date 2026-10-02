@@ -40,8 +40,8 @@ class KitTest {
         PlayerState p = new PlayerState(
                 Vec3.ZERO, Vec3.ZERO, 0, 0, true,
                 20, 20, KitType.BODY_BUILDER, 0, 0, 2, 0, 0, 0, true);
-        PlayerState after = KitSimulator.applyBodyBuilderFirstPad(p, true);
-        assertEquals(22.0, after.maxHealth, 0.01);
-        assertEquals(24.0, after.health, 0.01);
+        KitSimulator.onReachedPad(p, MazeMode.SPEED, true);
+        assertEquals(22.0, p.maxHealth, 0.01);
+        assertEquals(24.0, p.health, 0.01);
     }
 }
