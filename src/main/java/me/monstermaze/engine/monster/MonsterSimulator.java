@@ -115,63 +115,91 @@ public final class MonsterSimulator {
                 }
             }
 
-            double tx = Coordinates.pathCenterX(centerX, tr);
-            double tz = Coordinates.pathCenterZ(centerZ, tc);
-            double dx = tx - m.pos.x;
-            double dz = tz - m.pos.z;
-            double dist = Math.hypot(dx, dz);
-            if (dist < 1e-9) continue;
+            // Keep monsters locked to their selected cardinal lane. The source
+            // waypoint graph chooses a cardinal direction; do not steer directly
+            // toward a distant target with a diagonal vector, which can cut across
+            // corners or carry a mob over a gap.
+            int dir = m.direction;
+            if (dir < 0) {
+                dir = directionFromDelta(tr - nearestRow(m.pos.x), tc - nearestColumn(m.pos.z));
+                m.direction = dir;
+            }
 
-            float desiredYaw = (float) (Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0F;
-            float currentYaw = m.direction < 0 ? desiredYaw : yawFromDirection(m.direction);
-            float yaw = approachAngle(currentYaw, desiredYaw, 30.0F);
+            // Once the target waypoint is within source tolerance, snap to its
+            // centre before selecting the next random branch. This prevents small
+            // accumulated offsets from producing diagonal movement at corners.
+            if (atWaypoint(m)) {
+                m.pos = new Vec3(
+                        Coordinates.pathCenterX(centerX, tr),
+                        centerY,
+                        Coordinates.pathCenterZ(centerZ, tc));
+                int[] next = chooseNextWaypoint(m, tr, tc);
+                if (next == null) continue;
+                tr = next[0];
+                tc = next[1];
+                dir = m.direction;
+            }
 
             double movementInput = Math.min(MAX_REALIZED_MOVE_PER_TICK, speed * REALIZED_MOVE_SCALE);
-            double rad = Math.toRadians(yaw);
-            double fx = -Math.sin(rad);
-            double fz = Math.cos(rad);
+            double vx = 0.0;
+            double vz = 0.0;
+            switch (dir) {
+                case 0 -> vx = -movementInput;
+                case 1 -> vz = movementInput;
+                case 2 -> vx = movementInput;
+                case 3 -> vz = -movementInput;
+                default -> {
+                    continue;
+                }
+            }
 
-            double vx = fx * movementInput;
-            double vz = fz * movementInput;
             double nx = m.pos.x + vx;
             double nz = m.pos.z + vz;
 
+            int currentRow = nearestRow(m.pos.x);
+            int currentCol = nearestColumn(m.pos.z);
             int nextRow = nearestRow(nx);
             int nextCol = nearestColumn(nz);
 
-            // Keep the Safe Pad as a hard monster exclusion zone without using
-            // the dynamic waypoint overlay as a collision wall. Source mobs can
-            // turn diagonally through a corridor corner; blocking every
-            // non-traversable destination cell caused some mobs to deadlock.
-            if (Coordinates.inBounds(nextRow, nextCol)
-                    && maze.hasPadSurface(nextRow, nextCol)) {
-                m.targetWaypointX = -1;
-                m.targetWaypointZ = -1;
-                m.direction = -1;
+            // A monster route is allowed to occupy only live path cells with
+            // real physical floor. This explicitly prevents crossing empty gaps
+            // and prevents entering a Safe Pad surface.
+            if (!Coordinates.inBounds(nextRow, nextCol)
+                    || !maze.isTraversable(nextRow, nextCol)
+                    || maze.hasPadSurface(nextRow, nextCol)
+                    || !maze.isPhysicalFloor(nextRow, nextCol)) {
+                m.vel = Vec3.ZERO;
+
+                // If the attempted step reaches a new cell, abandon the stale
+                // route and make a fresh route choice from the current cell.
+                if (nextRow != currentRow || nextCol != currentCol) {
+                    m.targetWaypointX = -1;
+                    m.targetWaypointZ = -1;
+                    m.direction = -1;
+                }
+                continue;
+            }
+
+            // Never allow the full 0.7-wide body to leave physical floor while
+            // moving around a corner.
+            if (!hasPhysicalSupport(nx, nz)) {
                 m.vel = Vec3.ZERO;
                 continue;
             }
 
             m.vel = new Vec3(vx, 0.0, vz);
-            if (!hasPhysicalSupport(nx, nz)) {
-                m.pos = new Vec3(nx, centerY - 0.08D, nz);
-            } else {
-                m.pos = new Vec3(nx, centerY, nz);
-            }
+            m.pos = new Vec3(nx, centerY, nz);
 
-            // Never allow the monster's body to overlap a Safe Pad footprint.
+            // Keep the Safe Pad as a hard monster exclusion zone for the whole
+            // body, not just its centre cell.
             if (overlapsPadSurface(m.pos.x, m.pos.z)) {
-                // Revert this attempted move and force a new route decision.
-                m.pos = new Vec3(
-                        nx - vx, centerY,
-                        nz - vz);
+                m.pos = new Vec3(m.pos.x - vx, centerY, m.pos.z - vz);
                 m.vel = Vec3.ZERO;
                 m.targetWaypointX = -1;
                 m.targetWaypointZ = -1;
                 m.direction = -1;
             }
         }
-    }
 
     private int[] chooseNextWaypoint(MonsterState m, int row, int col) {
         List<int[]> choices = new ArrayList<>(maze.traversableCardinals(row, col));
