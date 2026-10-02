@@ -19,6 +19,10 @@ public final class JumpMechanics {
                 : DISABLED_JUMP_BOOST_AMPLIFIER;
     }
 
+    public static boolean isJumpEnabled(int amplifier) {
+        return amplifier == NO_JUMP_BOOST || amplifier > -2;
+    }
+
     /** Minecraft 1.8 jump formula; with no Jump Boost effect the base is 0.42. */
     public static double vanillaJumpVelocity(int amplifier) {
         if (amplifier == NO_JUMP_BOOST) return 0.42D;
