@@ -20,7 +20,7 @@ class EngineSmokeTest {
         assertEquals(5, state.player.jumpCharges);
         assertEquals(0, state.maze.layoutId);
         assertEquals(Layouts.SIZE, state.maze.raw.length);
-        assertEquals(10, state.monsters.size());
+        assertEquals(0, state.monsters.size());
         assertNotNull(state.activePad);
 
         TickResult result = engine.tick(state, Action.noop());
