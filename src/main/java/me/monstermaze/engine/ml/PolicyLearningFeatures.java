@@ -41,6 +41,12 @@ public final class PolicyLearningFeatures {
     private PolicyLearningFeatures() {}
 
     public static double[] extract(GameState state, Action action) {
+        throw new UnsupportedOperationException(
+                "Use extract(state, action, engineGraph) so route features use the authoritative dynamic graph");
+    }
+
+    public static double[] extract(GameState state, Action action,
+                                   me.monstermaze.engine.maze.MazeGraph graph) {
         if (state == null || state.player == null || action == null) {
             throw new IllegalArgumentException("state, player and action are required");
         }
@@ -179,11 +185,12 @@ public final class PolicyLearningFeatures {
         }
         if (!state.maze.physicalFloor[playerRow][playerCol]) return out;
 
+        if (graph == null) return out;
         List<int[]> path = new PlayerPathfinder().shortestPathToRegion(
-                stateGraph(state), playerRow, playerCol, activeRow, activeCol, 2);
+                graph, playerRow, playerCol, activeRow, activeCol, 2);
         if (path.isEmpty()) {
             path = new PlayerPathfinder().shortestPath(
-                    stateGraph(state), playerRow, playerCol, activeRow, activeCol);
+                    graph, playerRow, playerCol, activeRow, activeCol);
         }
         if (path.isEmpty()) return out;
 
@@ -238,28 +245,6 @@ public final class PolicyLearningFeatures {
             out[7] = clamp(turns / 20.0, 0.0, 1.0);
         }
         return out;
-    }
-
-    private static me.monstermaze.engine.maze.MazeGraph stateGraph(GameState state) {
-        // The engine holds the same dynamic floor in state.maze as the runtime
-        // graph. Reconstructing a tiny MazeGraph wrapper is unnecessary; the
-        // route search uses the shared engine graph stored in EngineGraphHolder.
-        if (state == null || state.maze == null) return null;
-        return EngineGraphHolder.graph(state);
-    }
-
-    /**
-     * The engine calls extract() during both training and standalone inference.
-     * This thread-local holder is populated by EngineImpl before extraction.
-     */
-    static final class EngineGraphHolder {
-        private static final ThreadLocal<me.monstermaze.engine.maze.MazeGraph> CURRENT =
-                new ThreadLocal<>();
-        static void set(me.monstermaze.engine.maze.MazeGraph graph) { CURRENT.set(graph); }
-        static void clear() { CURRENT.remove(); }
-        static me.monstermaze.engine.maze.MazeGraph graph(GameState state) {
-            return CURRENT.get();
-        }
     }
 
     private static double logicalX(double worldX, int centerX) {
