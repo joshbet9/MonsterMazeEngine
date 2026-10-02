@@ -50,6 +50,20 @@ class SourceFaithfulCoreTest {
 
 
 
+
+    @Test
+    void startingPhaseMatchesSourceCountdownLength() {
+        EngineImpl engine = new EngineImpl(1);
+        GameState state = engine.initialState(MazeMode.SPEED, 0, KitType.JUMPER, 9L);
+        for (int i = 0; i < 69; i++) {
+            state = engine.tick(state, Action.noop()).next;
+        }
+        assertEquals(GamePhase.STARTING, state.phase);
+        state = engine.tick(state, Action.noop()).next;
+        assertEquals(GamePhase.LIVE, state.phase);
+        assertEquals(70L, state.tick);
+    }
+
     @Test
     void centerSafeZonePathCellsStartDisabledAsMonsterWaypoints() {
         EngineImpl engine = new EngineImpl(5);
