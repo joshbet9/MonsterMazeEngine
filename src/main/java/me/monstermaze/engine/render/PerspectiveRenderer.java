@@ -55,9 +55,9 @@ public final class PerspectiveRenderer {
         } else {
             double yaw = Math.toRadians(cameraYaw);
             double pitch = Math.toRadians(cameraPitch);
-            camX = targetX - Math.sin(yaw) * Math.cos(pitch) * cameraDistance;
+            camX = targetX + Math.sin(yaw) * Math.cos(pitch) * cameraDistance;
             camY = targetY - Math.sin(pitch) * cameraDistance;
-            camZ = targetZ - Math.cos(yaw) * Math.cos(pitch) * cameraDistance;
+            camZ = targetZ + Math.cos(yaw) * Math.cos(pitch) * cameraDistance;
         }
 
         Camera camera = new Camera(
@@ -113,7 +113,7 @@ public final class PerspectiveRenderer {
             addCube(faces, camera,
                     state.activePad.centerX - 2.5, state.activePad.surfaceY,
                     state.activePad.centerZ - 2.5,
-                    state.activePad.centerX + 2.5, state.activePad.surfaceY + 0.15,
+                    state.activePad.centerX + 2.5, state.activePad.surfaceY + 1.0,
                     state.activePad.centerZ + 2.5,
                     new Color(210, 171, 60));
         }
@@ -121,7 +121,7 @@ public final class PerspectiveRenderer {
             addCube(faces, camera,
                     state.previewPad.centerX - 2.5, state.previewPad.surfaceY,
                     state.previewPad.centerZ - 2.5,
-                    state.previewPad.centerX + 2.5, state.previewPad.surfaceY + 0.12,
+                    state.previewPad.centerX + 2.5, state.previewPad.surfaceY + 1.0,
                     state.previewPad.centerZ + 2.5,
                     new Color(88, 200, 205));
         }
@@ -202,7 +202,7 @@ public final class PerspectiveRenderer {
             double angle = 2.0 * Math.PI * i / 32.0;
             P2 current = camera.project(
                     pad.centerX + Math.cos(angle) * 2.45,
-                    pad.surfaceY + 0.18,
+                    pad.surfaceY + 1.02,
                     pad.centerZ + Math.sin(angle) * 2.45);
             if (previous != null && current != null) {
                 g.drawLine((int) previous.x, (int) previous.y,
@@ -274,14 +274,15 @@ public final class PerspectiveRenderer {
             double yawRad = Math.toRadians(yaw);
             double pitchRad = Math.toRadians(pitch);
 
-            double fx = Math.sin(yawRad) * Math.cos(pitchRad);
+            // Minecraft 1.8 yaw: yaw=0 looks +Z, yaw=90 looks -X.
+            double fx = -Math.sin(yawRad) * Math.cos(pitchRad);
             double fy = Math.sin(pitchRad);
             double fz = Math.cos(yawRad) * Math.cos(pitchRad);
 
             double rx = Math.cos(yawRad);
-            double rz = -Math.sin(yawRad);
+            double rz = Math.sin(yawRad);
 
-            double ux = -Math.sin(pitchRad) * Math.sin(yawRad);
+            double ux = Math.sin(pitchRad) * Math.sin(yawRad);
             double uy = Math.cos(pitchRad);
             double uz = -Math.sin(pitchRad) * Math.cos(yawRad);
 
