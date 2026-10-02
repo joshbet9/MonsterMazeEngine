@@ -9,17 +9,19 @@ import me.monstermaze.engine.api.KitType;
  */
 public final class JumpMechanics {
     public static final int DISABLED_JUMP_BOOST_AMPLIFIER = -10;
+    public static final int NO_JUMP_BOOST = Integer.MIN_VALUE;
 
     private JumpMechanics() {}
 
     public static int jumpBoostAmplifier(KitType kit, boolean jumperChargeAvailable) {
         return kit == KitType.JUMPER && jumperChargeAvailable
-                ? 0
+                ? NO_JUMP_BOOST
                 : DISABLED_JUMP_BOOST_AMPLIFIER;
     }
 
-    /** Minecraft 1.8 jump formula: 0.42 + (amplifier + 1) * 0.1. */
+    /** Minecraft 1.8 jump formula; with no Jump Boost effect the base is 0.42. */
     public static double vanillaJumpVelocity(int amplifier) {
+        if (amplifier == NO_JUMP_BOOST) return 0.42D;
         return 0.42D + (amplifier + 1) * 0.1D;
     }
 }
