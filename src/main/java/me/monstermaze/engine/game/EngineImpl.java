@@ -139,7 +139,7 @@ public final class EngineImpl implements MonsterMazeEngine {
 
             // Source GameManager eliminates a player once they fall more than
             // three blocks below the maze centre/floor.
-            if (state.player.pos.y < centerY - 3.0) {
+            if (isBelowFallThreshold(state.player.pos.y, centerY)) {
                 state.alive = false;
                 state.phase = GamePhase.ENDING;
                 state.inMonsterMaze = false;
@@ -430,6 +430,11 @@ public final class EngineImpl implements MonsterMazeEngine {
             }
         }
         return rebuilt;
+    }
+
+    /** Source GameManager.onMove() fall/elimination threshold. */
+    public static boolean isBelowFallThreshold(double playerY, int floorY) {
+        return playerY < floorY - 3.0;
     }
 
     private static int initialJumperCharges(MazeMode mode, KitType kit) {
