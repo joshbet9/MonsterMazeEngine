@@ -77,6 +77,12 @@ public final class PlayerPhysics18 {
         double dz = p.vel.z;
         collision.move(p, dx, dy, dz);
 
+        if (!p.onGround && p.pos.y <= collision.floorY()) {
+            p.pos = new Vec3(p.pos.x, collision.floorY(), p.pos.z);
+            p.vel = new Vec3(p.vel.x, 0.0, p.vel.z);
+            p.onGround = true;
+        }
+
         if (!p.onGround) {
             p.vel = new Vec3(p.vel.x, (p.vel.y - GRAVITY) * AIR_DRAG, p.vel.z);
         }
