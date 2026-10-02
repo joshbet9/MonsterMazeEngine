@@ -2,33 +2,34 @@ package me.monstermaze.engine.game;
 
 import me.monstermaze.engine.api.MazeMode;
 
-/**
- * Phase timer rules from 1.8 mechanics docs.
- */
+/** Source-derived phase timing for Monster Maze 1.8. */
 public final class StageTimer {
+    public static final int PREVIEW_SECONDS = 2;
+    public static final int ALL_ON_PAD_SECONDS = 4;
+    public static final int CENTER_DETERIORATION_START_SECONDS = 20;
 
     private StageTimer() {}
 
-    /** Max phase length in ticks for a stage (20 tps). */
     public static int maxTicks(MazeMode mode, int stage) {
-        int startSec = (mode == MazeMode.MODERN) ? 35 : 60;
-        int sec = Math.max(15, startSec - 2 * stage);
-        return sec * 20;
+        return initialTicks(mode, stage);
     }
 
-    /**
-     * First-arrival shortened remaining time.
-     * max(6, 16 - (stage - 1)) seconds, but not above current remaining.
-     */
+    public static int initialTicks(MazeMode mode, int stage) {
+        int safe = Math.max(1, stage);
+        int seconds;
+        if (mode == MazeMode.ORIGINAL || mode == MazeMode.SPEED) {
+            seconds = Math.max(15, 60 - ((safe - 1) * 2));
+        } else {
+            // Same progression used by MonsterMazeAI's modern simulator.
+            seconds = Math.max(15, 35 - ((safe - 1) * 20 / 9));
+        }
+        return seconds * 20;
+    }
+
     public static int firstArrivalCapTicks(int stage, int currentRemainingTicks) {
-        int sec = Math.max(6, 16 - Math.max(0, stage - 1));
-        int cap = sec * 20;
-        return Math.min(currentRemainingTicks, cap);
+        int seconds = Math.max(6, 16 - Math.max(0, stage - 1));
+        return Math.min(currentRemainingTicks, seconds * 20);
     }
-
-    public static final int ALL_ON_PAD_SECONDS = 4;
-    public static final int PREVIEW_SECONDS = 2;
-    public static final int CENTER_DETERIORATION_START_TICKS = 20 * 20;
 
     public static int starterMonsters(MazeMode mode) {
         return mode == MazeMode.MODERN ? 225 : 150;

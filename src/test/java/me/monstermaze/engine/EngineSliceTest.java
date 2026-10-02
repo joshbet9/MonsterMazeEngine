@@ -14,12 +14,12 @@ class EngineSliceTest {
         MonsterMazeEngine engine = new EngineImpl(15);
         GameState state = engine.initialState(MazeMode.ORIGINAL, 0, KitType.JUMPER, 12345L);
 
-        assertEquals(15, state.monsters.size());
+        assertEquals(0, state.monsters.size());
         assertNotNull(state.activePad);
         assertEquals(5, state.player.jumpCharges);
         assertEquals(GamePhase.STARTING, state.phase);
 
-        Action move = new Action(0, 1, true, false, false, 0f, 0f, false, false, null);
+        Action move = new Action(1, 0, false, true, 0f, false);
 
         for (int i = 0; i < 250; i++) {
             TickResult r = engine.tick(state, move);
@@ -35,11 +35,17 @@ class EngineSliceTest {
     void monstersMoveFromSpawn() {
         MonsterMazeEngine engine = new EngineImpl(5);
         GameState state = engine.initialState(MazeMode.ORIGINAL, 1, KitType.JUMPER, 99L);
+        for (int i = 0; i < 10 && state.monsters.isEmpty(); i++) {
+            state = engine.tick(state, Action.noop()).next;
+        }
+        assertFalse(state.monsters.isEmpty());
         Vec3 p0 = state.monsters.get(0).pos;
 
         for (int i = 0; i < 40; i++) {
             state = engine.tick(state, Action.noop()).next;
+            if (state.monsters.isEmpty()) break;
         }
+        assertFalse(state.monsters.isEmpty());
         Vec3 p1 = state.monsters.get(0).pos;
         double dist = Math.hypot(p1.x - p0.x, p1.z - p0.z);
         assertTrue(dist > 0.5, "monster should have moved, dist=" + dist);
@@ -69,7 +75,11 @@ class EngineSliceTest {
             float yaw = (float) Math.toDegrees(Math.atan2(
                     -(nearest.pos.x - state.player.pos.x),
                     nearest.pos.z - state.player.pos.z));
-            Action chase = new Action(0, 1, true, true, true, yaw, 0f, false, false, nearest.id);
+            float yawDelta = yaw - state.player.yaw;
+            while (yawDelta >= 180f) yawDelta -= 360f;
+            while (yawDelta < -180f) yawDelta += 360f;
+            yawDelta = Math.max(-30f, Math.min(30f, yawDelta));
+            Action chase = new Action(1, 0, true, true, yawDelta, false, nearest.id);
             TickResult r = engine.tick(state, chase);
             state = r.next;
             for (GameEvent e : r.events) {

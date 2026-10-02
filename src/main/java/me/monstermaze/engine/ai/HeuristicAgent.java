@@ -5,28 +5,31 @@ import me.monstermaze.engine.maze.Coordinates;
 import me.monstermaze.engine.maze.MazeGraph;
 import me.monstermaze.engine.util.Pathfinder;
 
-/** Heuristic agent: BFS toward pad, flee monsters, use abilities when crowded. */
+/** Small deterministic smoke agent using the same semantic Action contract as MonsterMazeAI. */
 public final class HeuristicAgent {
-
-    private float yaw = 0f;
     private MazeGraph graph;
 
-    public void setGraph(MazeGraph graph) { this.graph = graph; }
+    public void setGraph(MazeGraph graph) {
+        this.graph = graph;
+    }
 
     public Action act(GameState state) {
         PlayerState p = state.player;
         SafePadState pad = state.activePad != null ? state.activePad : state.previewPad;
 
-        double targetX = pad != null ? pad.centerX + 0.5 : 0;
-        double targetZ = pad != null ? pad.centerZ + 0.5 : 0;
+        double targetX = pad != null ? pad.centerX + 0.5 : p.pos.x;
+        double targetZ = pad != null ? pad.centerZ + 0.5 : p.pos.z;
 
         MonsterState nearest = null;
-        double nearestD = Double.MAX_VALUE;
+        double nearestD = Double.POSITIVE_INFINITY;
         int closeCount = 0;
         for (MonsterState m : state.monsters) {
-            if (m.launched || m.frozenTicks > 0) continue;
+            if (m.removed || m.launched(state.tick) || m.frozen(state.tick)) continue;
             double d = Math.hypot(m.pos.x - p.pos.x, m.pos.z - p.pos.z);
-            if (d < nearestD) { nearestD = d; nearest = m; }
+            if (d < nearestD) {
+                nearestD = d;
+                nearest = m;
+            }
             if (d < 4.0) closeCount++;
         }
 
@@ -34,14 +37,14 @@ public final class HeuristicAgent {
         double desiredZ = targetZ - p.pos.z;
 
         if (graph != null && pad != null) {
-            int sr = Coordinates.layoutRow(0, (int) Math.floor(p.pos.x));
-            int sc = Coordinates.layoutCol(0, (int) Math.floor(p.pos.z));
-            int gr = Coordinates.layoutRow(0, pad.centerX);
-            int gc = Coordinates.layoutCol(0, pad.centerZ);
+            int sr = Coordinates.layoutRow(state.centerX, (int) Math.floor(p.pos.x));
+            int sc = Coordinates.layoutCol(state.centerZ, (int) Math.floor(p.pos.z));
+            int gr = Coordinates.layoutRow(state.centerX, pad.centerX);
+            int gc = Coordinates.layoutCol(state.centerZ, pad.centerZ);
             int[] next = Pathfinder.nextStep(graph, sr, sc, gr, gc);
             if (next != null) {
-                desiredX = Coordinates.pathCenterX(0, next[0]) - p.pos.x;
-                desiredZ = Coordinates.pathCenterZ(0, next[1]) - p.pos.z;
+                desiredX = Coordinates.pathCenterX(state.centerX, next[0]) - p.pos.x;
+                desiredZ = Coordinates.pathCenterZ(state.centerZ, next[1]) - p.pos.z;
             }
         }
 
@@ -50,31 +53,37 @@ public final class HeuristicAgent {
             double fz = p.pos.z - nearest.pos.z;
             double fl = Math.hypot(fx, fz);
             if (fl > 1e-6) {
-                fx /= fl; fz /= fl;
+                fx /= fl;
+                fz /= fl;
                 desiredX = desiredX * 0.25 + fx * 4.0;
                 desiredZ = desiredZ * 0.25 + fz * 4.0;
             }
         }
 
-        double len = Math.hypot(desiredX, desiredZ);
-        if (len > 1e-6) {
-            yaw = (float) Math.toDegrees(Math.atan2(-desiredX, desiredZ));
-        }
+        float desiredYaw = (float) Math.toDegrees(Math.atan2(-desiredX, desiredZ));
+        float yawDelta = normaliseDelta(desiredYaw - p.yaw);
+        yawDelta = Math.max(-30.0f, Math.min(30.0f, yawDelta));
 
-        boolean jump = p.onGround && (nearestD < 1.6 || (p.kit == KitType.JUMPER && p.jumpCharges > 0 && nearestD < 3));
-        boolean primary = false;
-        boolean enhanced = false;
+        boolean jump = p.onGround && (nearestD < 1.6
+                || (p.kit == KitType.JUMPER && p.jumpCharges > 0 && nearestD < 3.0));
 
-        if (p.kit == KitType.REPULSOR && closeCount >= 2 && p.abilityCharges > 0) primary = true;
-        if (p.kit == KitType.SLOWBALL && closeCount >= 3 && p.enhancedCooldownTicks <= 0) enhanced = true;
-        if (p.kit == KitType.BODY_BUILDER && closeCount >= 2 && p.abilityCharges > 0
-                && p.abilityCooldownTicks <= 0) enhanced = true;
+        boolean ability = switch (p.kit) {
+            case REPULSOR -> closeCount >= 2 && p.abilityCharges > 0;
+            case SLOWBALL -> closeCount >= 3
+                    && p.abilityCooldownUntilTick <= state.tick;
+            case BODY_BUILDER -> closeCount >= 2
+                    && p.abilityActivations > 0
+                    && p.abilityActiveUntilTick <= state.tick;
+            default -> false;
+        };
 
-        Integer targetMonster = null;
-        if (p.kit == KitType.MAVERICK && nearest != null && nearestD < 2.0 && pad != null) {
-            targetMonster = nearest.id;
-        }
+        return new Action(1.0, 0.0, jump, true, yawDelta, ability,
+                nearest == null ? null : nearest.id);
+    }
 
-        return new Action(0, 1.0, true, jump, jump, yaw, 0f, primary, enhanced, targetMonster);
+    private static float normaliseDelta(float value) {
+        while (value >= 180.0f) value -= 360.0f;
+        while (value < -180.0f) value += 360.0f;
+        return value;
     }
 }
