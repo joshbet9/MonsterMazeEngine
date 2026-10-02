@@ -1,14 +1,17 @@
 package me.monstermaze.engine.ai;
 
 import me.monstermaze.engine.api.*;
+import me.monstermaze.engine.maze.Coordinates;
+import me.monstermaze.engine.maze.MazeGraph;
+import me.monstermaze.engine.util.Pathfinder;
 
-/**
- * Simple heuristic agent using the shared Action API.
- * Sprint toward Safe Pad, avoid nearby monsters, use abilities when crowded.
- */
+/** Heuristic agent: BFS toward pad, flee monsters, use abilities when crowded. */
 public final class HeuristicAgent {
 
     private float yaw = 0f;
+    private MazeGraph graph;
+
+    public void setGraph(MazeGraph graph) { this.graph = graph; }
 
     public Action act(GameState state) {
         PlayerState p = state.player;
@@ -30,14 +33,26 @@ public final class HeuristicAgent {
         double desiredX = targetX - p.pos.x;
         double desiredZ = targetZ - p.pos.z;
 
-        if (nearest != null && nearestD < 2.5) {
+        if (graph != null && pad != null) {
+            int sr = Coordinates.layoutRow(0, (int) Math.floor(p.pos.x));
+            int sc = Coordinates.layoutCol(0, (int) Math.floor(p.pos.z));
+            int gr = Coordinates.layoutRow(0, pad.centerX);
+            int gc = Coordinates.layoutCol(0, pad.centerZ);
+            int[] next = Pathfinder.nextStep(graph, sr, sc, gr, gc);
+            if (next != null) {
+                desiredX = Coordinates.pathCenterX(0, next[0]) - p.pos.x;
+                desiredZ = Coordinates.pathCenterZ(0, next[1]) - p.pos.z;
+            }
+        }
+
+        if (nearest != null && nearestD < 2.2) {
             double fx = p.pos.x - nearest.pos.x;
             double fz = p.pos.z - nearest.pos.z;
             double fl = Math.hypot(fx, fz);
             if (fl > 1e-6) {
                 fx /= fl; fz /= fl;
-                desiredX = desiredX * 0.4 + fx * 3.0;
-                desiredZ = desiredZ * 0.4 + fz * 3.0;
+                desiredX = desiredX * 0.25 + fx * 4.0;
+                desiredZ = desiredZ * 0.25 + fz * 4.0;
             }
         }
 
@@ -46,7 +61,7 @@ public final class HeuristicAgent {
             yaw = (float) Math.toDegrees(Math.atan2(-desiredX, desiredZ));
         }
 
-        boolean jump = p.onGround && (nearestD < 1.8 || !p.onSafePad);
+        boolean jump = p.onGround && (nearestD < 1.6 || (p.kit == KitType.JUMPER && p.jumpCharges > 0 && nearestD < 3));
         boolean primary = false;
         boolean enhanced = false;
 
