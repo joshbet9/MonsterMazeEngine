@@ -57,7 +57,7 @@ public final class PerspectiveRenderer {
             double pitch = Math.toRadians(cameraPitch);
             camX = targetX + Math.sin(yaw) * Math.cos(pitch) * cameraDistance;
             camY = targetY - Math.sin(pitch) * cameraDistance;
-            camZ = targetZ + Math.cos(yaw) * Math.cos(pitch) * cameraDistance;
+            camZ = targetZ - Math.cos(yaw) * Math.cos(pitch) * cameraDistance;
         }
 
         Camera camera = new Camera(
