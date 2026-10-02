@@ -5,6 +5,7 @@ import me.monstermaze.engine.api.*;
 import me.monstermaze.engine.audio.Sfx;
 import me.monstermaze.engine.game.EngineImpl;
 import me.monstermaze.engine.game.StageTimer;
+import me.monstermaze.engine.maze.Layouts;
 import me.monstermaze.engine.render.TopDownRenderer;
 
 import javax.swing.*;
@@ -15,15 +16,12 @@ import java.awt.image.BufferedImage;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Playable Monster Maze with camera follow, zoom, AI mode, SFX.
- * Controls: WASD, arrows, Space, Shift, Q/E, +/- zoom, F AI, M mute.
- */
+/** Playable Monster Maze: camera, zoom, AI, SFX, minimap, end summary. */
 public final class PlayFrame extends JFrame {
 
     private static final int VIEW = 520;
 
-    private final MonsterMazeEngine engine;
+    private final EngineImpl engine;
     private GameState state;
     private final TopDownRenderer renderer;
     private final GamePanel panel;
@@ -34,13 +32,16 @@ public final class PlayFrame extends JFrame {
     private double zoom = 2.2;
     private volatile boolean running = true;
     private volatile boolean aiEnabled = false;
+    private int peakStage = 0;
+    private long runStartMs = System.currentTimeMillis();
+    private boolean endShown = false;
 
-    /** @param monsterOverride -1 = mode default (150 Original/Speed, 225 Modern) */
     public PlayFrame(MazeMode mode, KitType kit, int layoutId, long seed, int monsterOverride) {
         super("Monster Maze \u2014 " + displayKit(kit));
         int monsters = monsterOverride >= 0 ? monsterOverride : StageTimer.starterMonsters(mode);
         this.engine = new EngineImpl(monsters);
         this.state = engine.initialState(mode, layoutId, kit, seed);
+        this.agent.setGraph(engine.getWorkingGraph());
         this.renderer = new TopDownRenderer(6);
         this.panel = new GamePanel();
         this.hud = new JLabel(" ");
@@ -99,12 +100,25 @@ public final class PlayFrame extends JFrame {
 
     private void tickOnce() {
         if (state.phase == GamePhase.ENDING) {
+            if (!endShown) {
+                endShown = true;
+                final int stage = Math.max(peakStage, state.stage);
+                final long secs = (System.currentTimeMillis() - runStartMs) / 1000;
+                final int mobs = state.monsters.size();
+                SwingUtilities.invokeLater(() -> {
+                    panel.repaint();
+                    JOptionPane.showMessageDialog(this,
+                            "Eliminated!\nPeak stage: " + stage + "\nTime: " + secs + "s\nMobs at end: " + mobs,
+                            "Run over", JOptionPane.INFORMATION_MESSAGE);
+                });
+            }
             SwingUtilities.invokeLater(panel::repaint);
             return;
         }
 
         Action action;
         if (aiEnabled) {
+            agent.setGraph(engine.getWorkingGraph());
             action = agent.act(state);
             yaw = action.yaw;
         } else {
@@ -128,6 +142,7 @@ public final class PlayFrame extends JFrame {
         TickResult result = engine.tick(state, action);
         Sfx.playEvents(result.events);
         state = result.next;
+        if (state.stage > peakStage) peakStage = state.stage;
 
         final String hudText = formatHud(state);
         SwingUtilities.invokeLater(() -> { hud.setText(hudText); panel.repaint(); });
@@ -136,8 +151,8 @@ public final class PlayFrame extends JFrame {
     private String formatHud(GameState s) {
         PlayerState p = s.player;
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("  Stage %d  Timer %ds  HP %.0f/%.0f  %s",
-                s.stage, s.phaseTimerTicks / 20, p.health, p.maxHealth, displayKit(p.kit)));
+        sb.append(String.format("  Stage %d (peak %d)  Timer %ds  HP %.0f/%.0f  %s",
+                s.stage, peakStage, s.phaseTimerTicks / 20, p.health, p.maxHealth, displayKit(p.kit)));
         if (p.kit == KitType.JUMPER) sb.append("  Jumps ").append(p.jumpCharges);
         else if (p.kit == KitType.SLOWBALL) {
             sb.append("  Balls ").append(p.abilityCharges);
@@ -149,9 +164,8 @@ public final class PlayFrame extends JFrame {
         }
         sb.append(String.format("  Mobs %d  %s  zoom %.1fx", s.monsters.size(), s.phase, zoom));
         if (aiEnabled) sb.append("  [AI]");
-        if (s.phase == GamePhase.ENDING) sb.append("  \u2014 ELIMINATED \u2014 stage ").append(s.stage);
         if (p.onSafePad) sb.append("  [PAD]");
-        sb.append("   F=AI  +/-=zoom  M=mute");
+        sb.append("   F=AI  +/- zoom  M=mute");
         return sb.toString();
     }
 
@@ -171,11 +185,41 @@ public final class PlayFrame extends JFrame {
             setPreferredSize(new Dimension(VIEW, VIEW));
             setBackground(Color.BLACK);
         }
+
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             BufferedImage img = renderer.renderCamera(state, getSize(), zoom);
             g.drawImage(img, 0, 0, null);
+            drawMinimap((Graphics2D) g);
+        }
+
+        private void drawMinimap(Graphics2D g) {
+            int ms = 110;
+            int ox = getWidth() - ms - 10;
+            int oy = 10;
+            g.setColor(new Color(0, 0, 0, 160));
+            g.fillRoundRect(ox - 2, oy - 2, ms + 4, ms + 4, 6, 6);
+            double scale = ms / (double) Layouts.SIZE;
+            boolean[][] trav = state.maze.traversable;
+            for (int r = 0; r < Layouts.SIZE; r += 2) {
+                for (int c = 0; c < Layouts.SIZE; c += 2) {
+                    if (trav[r][c]) {
+                        g.setColor(new Color(70, 70, 80));
+                        g.fillRect(ox + (int) (c * scale), oy + (int) (r * scale), 2, 2);
+                    }
+                }
+            }
+            if (state.activePad != null) {
+                int pr = state.activePad.centerX + Layouts.HALF;
+                int pc = state.activePad.centerZ + Layouts.HALF;
+                g.setColor(new Color(80, 255, 120));
+                g.fillRect(ox + (int) (pc * scale) - 2, oy + (int) (pr * scale) - 2, 5, 5);
+            }
+            int pr = (int) Math.floor(state.player.pos.x) + Layouts.HALF;
+            int pc = (int) Math.floor(state.player.pos.z) + Layouts.HALF;
+            g.setColor(new Color(100, 200, 255));
+            g.fillOval(ox + (int) (pc * scale) - 2, oy + (int) (pr * scale) - 2, 5, 5);
         }
     }
 
@@ -187,7 +231,6 @@ public final class PlayFrame extends JFrame {
             int monsters = -1;
             long seed = System.currentTimeMillis();
             boolean startAi = false;
-
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
                     case "--mode": mode = MazeMode.valueOf(args[++i].toUpperCase()); break;
@@ -204,7 +247,6 @@ public final class PlayFrame extends JFrame {
                     case "--ai": startAi = true; break;
                 }
             }
-
             PlayFrame frame = new PlayFrame(mode, kit, layout, seed, monsters);
             if (startAi) frame.setAiEnabled(true);
             frame.setVisible(true);
