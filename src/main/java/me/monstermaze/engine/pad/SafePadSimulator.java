@@ -34,7 +34,7 @@ public final class SafePadSimulator {
     public static SafePadState initialPad(
             MazeGraph graph, int centerX, int centerY, int centerZ, SeededRandom rng) {
         CellPools pools = new CellPools(graph);
-        int[] cell = furthest(new int[]{Layouts.HALF, Layouts.HALF}, pools.valid);
+        int[] cell = furthest(new int[]{Layouts.HALF, Layouts.HALF}, pools.valid, rng);
         SafePadState pad = toPad(cell, centerX, centerY, centerZ, false);
         installSurface(graph, centerX, centerZ, pad);
         return pad;
@@ -133,7 +133,7 @@ public final class SafePadSimulator {
                 preview);
     }
 
-    private static int[] furthest(int[] from, List<int[]> cells) {
+    private static int[] furthest(int[] from, List<int[]> cells, SeededRandom rng) {
         if (cells.isEmpty()) return null;
         double best = -1;
         ArrayList<int[]> ties = new ArrayList<>();
@@ -147,7 +147,7 @@ public final class SafePadSimulator {
                 ties.add(c);
             }
         }
-        return ties.get(0);
+        return ties.get(rng.nextInt(ties.size()));
     }
 
     private static double distanceSq(int[] a, int[] b) {
