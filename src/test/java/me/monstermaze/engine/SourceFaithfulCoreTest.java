@@ -64,6 +64,20 @@ class SourceFaithfulCoreTest {
         assertEquals(70L, state.tick);
     }
 
+
+    @Test
+    void fallingOffTheMazeEndsTheRun() {
+        EngineImpl engine = new EngineImpl(0);
+        GameState state = engine.initialState(MazeMode.SPEED, 0, KitType.JUMPER, 4L);
+        state = state.copy();
+        state.phase = GamePhase.LIVE;
+        state.player.pos = new Vec3(state.player.pos.x, state.centerY - 3.1, state.player.pos.z);
+        TickResult result = engine.tick(state, Action.noop());
+        assertFalse(result.next.alive);
+        assertEquals(GamePhase.ENDING, result.next.phase);
+        assertTrue(result.next.inMonsterMaze == false);
+    }
+
     @Test
     void centerSafeZonePathCellsStartDisabledAsMonsterWaypoints() {
         EngineImpl engine = new EngineImpl(5);
