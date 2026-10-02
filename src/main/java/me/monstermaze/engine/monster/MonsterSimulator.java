@@ -70,6 +70,25 @@ public final class MonsterSimulator {
                 }
             }
 
+            // Treat the active/preview Safe Pad footprint as a hard
+            // exclusion for the monster's full 0.7-block body, not just its
+            // center cell. If a mob is already overlapping the pad, find an
+            // adjacent traversable escape direction instead of allowing it to
+            // remain visually on the pad.
+            if (overlapsPadSurface(m.pos.x, m.pos.z)) {
+                int row = nearestRow(m.pos.x);
+                int col = nearestColumn(m.pos.z);
+                int[] exit = findPadExit(row, col);
+                if (exit == null) {
+                    m.removed = true;
+                    m.vel = Vec3.ZERO;
+                    continue;
+                }
+                m.targetWaypointX = exit[0];
+                m.targetWaypointZ = exit[1];
+                m.direction = directionFromDelta(exit[0] - row, exit[1] - col);
+            }
+
             int tr = m.targetWaypointX;
             int tc = m.targetWaypointZ;
 
@@ -140,14 +159,16 @@ public final class MonsterSimulator {
                 m.pos = new Vec3(nx, centerY, nz);
             }
 
-            // A pad is a monster exclusion surface. This also protects against
-            // a mob reaching the pad through an unusual launch/collision path.
-            int landedRow = nearestRow(m.pos.x);
-            int landedCol = nearestColumn(m.pos.z);
-            if (Coordinates.inBounds(landedRow, landedCol)
-                    && maze.hasPadSurface(landedRow, landedCol)) {
-                m.removed = true;
+            // Never allow the monster's body to overlap a Safe Pad footprint.
+            if (overlapsPadSurface(m.pos.x, m.pos.z)) {
+                // Revert this attempted move and force a new route decision.
+                m.pos = new Vec3(
+                        nx - vx, centerY,
+                        nz - vz);
                 m.vel = Vec3.ZERO;
+                m.targetWaypointX = -1;
+                m.targetWaypointZ = -1;
+                m.direction = -1;
             }
         }
     }
@@ -213,6 +234,44 @@ public final class MonsterSimulator {
         } else if (tick - m.launchedAtTick >= 30) {
             m.removed = true;
         }
+    }
+
+    private boolean overlapsPadSurface(double x, double z) {
+        final double halfWidth = 0.35D;
+        double minX = x - halfWidth, maxX = x + halfWidth;
+        double minZ = z - halfWidth, maxZ = z + halfWidth;
+        int minRow = nearestRow(minX);
+        int maxRow = nearestRow(Math.nextDown(maxX));
+        int minCol = nearestColumn(minZ);
+        int maxCol = nearestColumn(Math.nextDown(maxZ));
+
+        for (int r = minRow; r <= maxRow; r++) {
+            for (int c = minCol; c <= maxCol; c++) {
+                if (Coordinates.inBounds(r, c) && maze.hasPadSurface(r, c)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private int[] findPadExit(int row, int col) {
+        if (!Coordinates.inBounds(row, col)) return null;
+        List<int[]> exits = maze.traversableCardinals(row, col);
+        if (exits.isEmpty()) return null;
+
+        // Deterministic selection avoids consuming the movement RNG just to
+        // escape a newly placed pad.
+        int[] best = exits.get(0);
+        for (int[] candidate : exits) {
+            if (Math.abs(candidate[0] - Layouts.HALF)
+                    + Math.abs(candidate[1] - Layouts.HALF)
+                    > Math.abs(best[0] - Layouts.HALF)
+                    + Math.abs(best[1] - Layouts.HALF)) {
+                best = candidate;
+            }
+        }
+        return best;
     }
 
     private boolean hasPhysicalSupport(double x, double z) {
