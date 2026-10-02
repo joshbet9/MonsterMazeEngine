@@ -24,9 +24,9 @@ public final class TraceRecorder {
                 state.player.vel.x, state.player.vel.y, state.player.vel.z,
                 state.player.yaw, state.player.health,
                 state.stage, state.phaseTimerTicks, state.monsters.size(),
-                action.moveX, action.moveZ,
-                action.sprint, action.jump, action.holdJump,
-                action.usePrimary, action.useEnhanced,
+                action.forward, action.strafe,
+                action.sprint, action.jump, action.yawDelta,
+                action.useAbility,
                 ev
         ));
     }
