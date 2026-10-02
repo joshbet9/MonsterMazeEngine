@@ -24,7 +24,9 @@ import java.util.List;
 public final class EngineImpl implements MonsterMazeEngine {
     private static final long MONSTER_SEED_XOR = 0x6A09E667F3BCC909L;
     private static final long PAD_SEED_XOR = 0xBB67AE8584CAA73BL;
-    private static final int STARTING_TICKS = 200;
+    // Source GameManager countdown: first message at 10 ticks, then every 20 ticks;
+    // beginLive() runs on the fourth callback at tick 70 (~3.5 seconds).
+    private static final int STARTING_TICKS = 70;
     private static final int INITIAL_CENTER_STAGE = 11;
 
     private final int centerX, centerY, centerZ, starterOverride;
