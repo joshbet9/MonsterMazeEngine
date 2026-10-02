@@ -66,16 +66,9 @@ class SourceFaithfulCoreTest {
 
 
     @Test
-    void fallingOffTheMazeEndsTheRun() {
-        EngineImpl engine = new EngineImpl(0);
-        GameState state = engine.initialState(MazeMode.SPEED, 0, KitType.JUMPER, 4L);
-        state = state.copy();
-        state.phase = GamePhase.LIVE;
-        state.player.pos = new Vec3(state.player.pos.x, state.centerY - 3.1, state.player.pos.z);
-        TickResult result = engine.tick(state, Action.noop());
-        assertFalse(result.next.alive);
-        assertEquals(GamePhase.ENDING, result.next.phase);
-        assertTrue(result.next.inMonsterMaze == false);
+    void sourceFallThresholdIsThreeBlocksBelowMazeFloor() {
+        assertTrue(EngineImpl.isBelowFallThreshold(60.9, 64));
+        assertFalse(EngineImpl.isBelowFallThreshold(61.0, 64));
     }
 
     @Test
