@@ -102,7 +102,7 @@ public final class MonsterSimulator {
                 tr = tc = -1;
             }
 
-            if (tr < 0 || tc < 0 || atWaypoint(m)) {
+            if (tr < 0 || tc < 0) {
                 int row = nearestRow(m.pos.x);
                 int col = nearestColumn(m.pos.z);
                 if (Coordinates.inBounds(row, col) && maze.isTraversable(row, col)) {
@@ -113,6 +113,17 @@ public final class MonsterSimulator {
                 } else {
                     continue;
                 }
+            } else if (atWaypoint(m)) {
+                // Snap to the actual waypoint centre before making the next
+                // source-style random cardinal choice.
+                m.pos = new Vec3(
+                        Coordinates.pathCenterX(centerX, tr),
+                        centerY,
+                        Coordinates.pathCenterZ(centerZ, tc));
+                int[] next = chooseNextWaypoint(m, tr, tc);
+                if (next == null) continue;
+                tr = next[0];
+                tc = next[1];
             }
 
             // Keep monsters locked to their selected cardinal lane. The source
@@ -123,21 +134,6 @@ public final class MonsterSimulator {
             if (dir < 0) {
                 dir = directionFromDelta(tr - nearestRow(m.pos.x), tc - nearestColumn(m.pos.z));
                 m.direction = dir;
-            }
-
-            // Once the target waypoint is within source tolerance, snap to its
-            // centre before selecting the next random branch. This prevents small
-            // accumulated offsets from producing diagonal movement at corners.
-            if (atWaypoint(m)) {
-                m.pos = new Vec3(
-                        Coordinates.pathCenterX(centerX, tr),
-                        centerY,
-                        Coordinates.pathCenterZ(centerZ, tc));
-                int[] next = chooseNextWaypoint(m, tr, tc);
-                if (next == null) continue;
-                tr = next[0];
-                tc = next[1];
-                dir = m.direction;
             }
 
             double movementInput = Math.min(MAX_REALIZED_MOVE_PER_TICK, speed * REALIZED_MOVE_SCALE);
