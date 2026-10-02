@@ -48,6 +48,87 @@ class SourceFaithfulCoreTest {
         assertEquals(StageTimer.starterMonsters(MazeMode.SPEED), state.monsters.size());
     }
 
+
+
+
+    @Test
+    void startingPhaseMatchesSourceCountdownLength() {
+        EngineImpl engine = new EngineImpl(1);
+        GameState state = engine.initialState(MazeMode.SPEED, 0, KitType.JUMPER, 9L);
+        for (int i = 0; i < 69; i++) {
+            state = engine.tick(state, Action.noop()).next;
+        }
+        assertEquals(GamePhase.STARTING, state.phase);
+        state = engine.tick(state, Action.noop()).next;
+        assertEquals(GamePhase.LIVE, state.phase);
+        assertEquals(70L, state.tick);
+    }
+
+
+    @Test
+    void sourceFallThresholdIsThreeBlocksBelowMazeFloor() {
+        assertTrue(EngineImpl.isBelowFallThreshold(60.9, 64));
+        assertFalse(EngineImpl.isBelowFallThreshold(61.0, 64));
+    }
+
+    @Test
+    void centerSafeZonePathCellsStartDisabledAsMonsterWaypoints() {
+        EngineImpl engine = new EngineImpl(5);
+        engine.initialState(MazeMode.SPEED, 0, KitType.JUMPER, 1L);
+        int checked = 0;
+        for (int r = 0; r < me.monstermaze.engine.maze.Layouts.SIZE; r++) {
+            for (int col = 0; col < me.monstermaze.engine.maze.Layouts.SIZE; col++) {
+                int raw = engine.getWorkingGraph().raw(r, col);
+                if (raw == 5 || raw == 6) {
+                    checked++;
+                    assertFalse(engine.getWorkingGraph().isTraversable(r, col));
+                }
+            }
+        }
+        assertTrue(checked > 0);
+    }
+
+    @Test
+    void previewPadIsActiveLikeSourceNextSafePad() {
+        me.monstermaze.engine.maze.MazeGraph graph = new me.monstermaze.engine.maze.MazeGraph(0);
+        SafePadState preview = me.monstermaze.engine.pad.SafePadSimulator.previewPad(
+                graph, 0, 64, 0, new me.monstermaze.engine.util.SeededRandom(2L), java.util.List.of());
+        assertNotNull(preview);
+        assertTrue(preview.active);
+        assertTrue(preview.isPreview);
+    }
+
+    @Test
+    void monstersStayStillDuringStartingCountdown() {
+        EngineImpl engine = new EngineImpl(5);
+        GameState state = engine.initialState(MazeMode.SPEED, 0, KitType.JUMPER, 3L);
+        state = engine.tick(state, Action.noop()).next;
+        assertFalse(state.monsters.isEmpty());
+        Vec3 before = state.monsters.get(0).pos;
+        state = engine.tick(state, Action.noop()).next;
+        assertEquals(before.x, state.monsters.get(0).pos.x, 1e-12);
+        assertEquals(before.y, state.monsters.get(0).pos.y, 1e-12);
+        assertEquals(before.z, state.monsters.get(0).pos.z, 1e-12);
+    }
+
+    @Test
+    void bodyRushContactDoesNotDealNormalDamage() {
+        GameState state = new GameState();
+        state.mode = MazeMode.SPEED;
+        state.tick = 100L;
+        state.player = new PlayerState(
+                new Vec3(0.5, 64, 0.5), Vec3.ZERO, 0, 0, true,
+                20, 20, KitType.BODY_BUILDER, 0, 0, 0, 0, 0, 0, false);
+        state.player.abilityActiveUntilTick = 200L;
+        state.maze = new me.monstermaze.engine.maze.MazeGraph(0).toMazeState();
+        state.monsters.add(new MonsterState(
+                1, new Vec3(0.9, 64, 0.5), Vec3.ZERO, 0, 0, -1, false, 0));
+        int result = me.monstermaze.engine.physics.MonsterMazeBumpModel.apply(state);
+        assertEquals(me.monstermaze.engine.physics.MonsterMazeBumpModel.RESULT_BODY_RUSH, result);
+        assertEquals(20.0, state.player.health, 1e-9);
+        assertTrue(state.monsters.get(0).launched);
+    }
+
     @Test
     void policyFeatureContractIsExactly52Inputs() {
         EngineImpl engine = new EngineImpl(5);

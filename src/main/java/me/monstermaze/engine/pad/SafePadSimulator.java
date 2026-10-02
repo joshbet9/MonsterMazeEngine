@@ -73,8 +73,9 @@ public final class SafePadSimulator {
             SeededRandom rng, List<SafePadState> avoid) {
         SafePadState pad = nextPad(graph, centerX, centerY, centerZ, rng, avoid);
         if (pad == null) return null;
+        // Source GameManager keeps nextSafePad active immediately after spawning it.
         SafePadState preview = new SafePadState(
-                pad.centerX, pad.centerZ, pad.surfaceY, pad.decayStep, false, true);
+                pad.centerX, pad.centerZ, pad.surfaceY, pad.decayStep, true, true);
         installSurface(graph, centerX, centerZ, preview);
         return preview;
     }

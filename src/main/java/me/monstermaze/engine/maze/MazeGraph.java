@@ -25,7 +25,14 @@ public final class MazeGraph {
         this.padSurface = new boolean[Layouts.SIZE][Layouts.SIZE];
         for (int r = 0; r < Layouts.SIZE; r++) {
             for (int c = 0; c < Layouts.SIZE; c++) {
-                physicalFloor[r][c] = raw[r][c] != 0;
+                int value = raw[r][c];
+                physicalFloor[r][c] = value != 0;
+
+                // Source MazeGenerator disables centre-safe-zone path cells (5/6)
+                // as monster waypoints until the final deterioration step.
+                if (value == 5 || value == 6) {
+                    disabled[r][c] = true;
+                }
             }
         }
     }

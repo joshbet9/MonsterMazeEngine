@@ -114,8 +114,10 @@ public final class TopDownRenderer {
     private void drawPad(Graphics2D g, SafePadState pad, double originRow, double originCol,
                          double scale, Color fill, Color border) {
         if (pad == null) return;
-        int row = pad.centerX + Layouts.HALF;
-        int col = pad.centerZ + Layouts.HALF;
+        // Path/player centres are world block coordinate + 0.5. Keep the
+        // Safe Pad centred on that same continuous coordinate system.
+        double row = pad.centerX + Layouts.HALF + 0.5;
+        double col = pad.centerZ + Layouts.HALF + 0.5;
         double half = 2.5;
         int sx = (int) Math.round((col - half - originCol) * scale);
         int sy = (int) Math.round((row - half - originRow) * scale);
@@ -125,8 +127,8 @@ public final class TopDownRenderer {
         g.setColor(border);
         g.setStroke(new BasicStroke(Math.max(1f, (float) (scale * 0.25))));
         g.drawRoundRect(sx, sy, size, size, 6, 6);
-        int cx = (int) Math.round((col + 0.5 - originCol) * scale);
-        int cy = (int) Math.round((row + 0.5 - originRow) * scale);
+        int cx = (int) Math.round((col - originCol) * scale);
+        int cy = (int) Math.round((row - originRow) * scale);
         int bs = Math.max(2, (int) (scale * 0.5));
         g.setColor(Color.WHITE);
         g.fillOval(cx - bs / 2, cy - bs / 2, bs, bs);

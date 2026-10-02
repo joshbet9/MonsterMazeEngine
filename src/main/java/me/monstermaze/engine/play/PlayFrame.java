@@ -40,6 +40,7 @@ public final class PlayFrame extends JFrame {
     private int peakStage = 0;
     private long runStartMs = System.currentTimeMillis();
     private boolean endShown = false;
+    private boolean abilityHeld = false;
 
     public PlayFrame(MazeMode mode, KitType kit, int layoutId, long seed, int monsterOverride) {
         this(mode, kit, layoutId, seed, monsterOverride, null, null);
@@ -194,7 +195,9 @@ public final class PlayFrame extends JFrame {
         if (keys.contains(KeyEvent.VK_D)) strafe += 1.0;
 
         boolean jump = keys.contains(KeyEvent.VK_SPACE);
-        boolean ability = keys.contains(KeyEvent.VK_Q) || keys.contains(KeyEvent.VK_E);
+        boolean abilityKeyDown = keys.contains(KeyEvent.VK_Q) || keys.contains(KeyEvent.VK_E);
+        boolean ability = abilityKeyDown && !abilityHeld;
+        abilityHeld = abilityKeyDown;
         me.monstermaze.engine.api.Action action = new me.monstermaze.engine.api.Action(
                 forward, strafe,
                 jump,
