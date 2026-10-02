@@ -9,6 +9,7 @@ import me.monstermaze.engine.monster.MonsterSimulator;
 import me.monstermaze.engine.pad.SafePadSimulator;
 import me.monstermaze.engine.physics.MonsterMazeBumpModel;
 import me.monstermaze.engine.physics.PlayerPhysics18;
+import me.monstermaze.engine.physics.JumpMechanics;
 import me.monstermaze.engine.util.SeededRandom;
 
 import java.util.ArrayList;
@@ -131,9 +132,10 @@ public final class EngineImpl implements MonsterMazeEngine {
             KitSimulator.activate(state.player, state.monsters, action, state.mode,
                     state.activePad, state.previewPad, currentTick);
 
-            boolean canUseNormalJump = state.player.kit != KitType.JUMPER
-                    || state.player.jumpCharges > 0;
-            int jumpAmplifier = canUseNormalJump ? 0 : -10;
+            boolean canUseNormalJump = state.player.kit == KitType.JUMPER
+                    && state.player.jumpCharges > 0;
+            int jumpAmplifier = JumpMechanics.jumpBoostAmplifier(
+                    state.player.kit, canUseNormalJump);
 
             physics.tick(state.player, action, jumpAmplifier);
 
