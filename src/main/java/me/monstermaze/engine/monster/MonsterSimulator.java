@@ -71,6 +71,17 @@ public final class MonsterSimulator {
 
             int tr = m.targetWaypointX;
             int tc = m.targetWaypointZ;
+
+            // A Safe Pad disables monster waypoints immediately. Invalidate any
+            // stale target selected before the pad appeared so an existing route
+            // cannot carry the mob through the pad.
+            if (tr >= 0 && tc >= 0 && !maze.isTraversable(tr, tc)) {
+                m.targetWaypointX = -1;
+                m.targetWaypointZ = -1;
+                m.direction = -1;
+                tr = tc = -1;
+            }
+
             if (tr < 0 || tc < 0 || atWaypoint(m)) {
                 int row = nearestRow(m.pos.x);
                 int col = nearestColumn(m.pos.z);
@@ -105,11 +116,34 @@ public final class MonsterSimulator {
             double nx = m.pos.x + vx;
             double nz = m.pos.z + vz;
 
+            int nextRow = nearestRow(nx);
+            int nextCol = nearestColumn(nz);
+            // Do not let the mob's continuous movement cross into a disabled
+            // waypoint/pad cell merely because its current target is beyond it.
+            if (!Coordinates.inBounds(nextRow, nextCol)
+                    || !maze.isTraversable(nextRow, nextCol)) {
+                m.targetWaypointX = -1;
+                m.targetWaypointZ = -1;
+                m.direction = -1;
+                m.vel = Vec3.ZERO;
+                continue;
+            }
+
             m.vel = new Vec3(vx, 0.0, vz);
             if (!hasPhysicalSupport(nx, nz)) {
                 m.pos = new Vec3(nx, centerY - 0.08D, nz);
             } else {
                 m.pos = new Vec3(nx, centerY, nz);
+            }
+
+            // A pad is a monster exclusion surface. This also protects against
+            // a mob reaching the pad through an unusual launch/collision path.
+            int landedRow = nearestRow(m.pos.x);
+            int landedCol = nearestColumn(m.pos.z);
+            if (Coordinates.inBounds(landedRow, landedCol)
+                    && maze.hasPadSurface(landedRow, landedCol)) {
+                m.removed = true;
+                m.vel = Vec3.ZERO;
             }
         }
     }
