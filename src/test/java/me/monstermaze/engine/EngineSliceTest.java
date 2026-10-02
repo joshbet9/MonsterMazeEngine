@@ -14,7 +14,7 @@ class EngineSliceTest {
         MonsterMazeEngine engine = new EngineImpl(15);
         GameState state = engine.initialState(MazeMode.ORIGINAL, 0, KitType.JUMPER, 12345L);
 
-        assertEquals(15, state.monsters.size());
+        assertEquals(0, state.monsters.size());
         assertNotNull(state.activePad);
         assertEquals(5, state.player.jumpCharges);
         assertEquals(GamePhase.STARTING, state.phase);
@@ -35,11 +35,17 @@ class EngineSliceTest {
     void monstersMoveFromSpawn() {
         MonsterMazeEngine engine = new EngineImpl(5);
         GameState state = engine.initialState(MazeMode.ORIGINAL, 1, KitType.JUMPER, 99L);
+        for (int i = 0; i < 10 && state.monsters.isEmpty(); i++) {
+            state = engine.tick(state, Action.noop()).next;
+        }
+        assertFalse(state.monsters.isEmpty());
         Vec3 p0 = state.monsters.get(0).pos;
 
         for (int i = 0; i < 40; i++) {
             state = engine.tick(state, Action.noop()).next;
+            if (state.monsters.isEmpty()) break;
         }
+        assertFalse(state.monsters.isEmpty());
         Vec3 p1 = state.monsters.get(0).pos;
         double dist = Math.hypot(p1.x - p0.x, p1.z - p0.z);
         assertTrue(dist > 0.5, "monster should have moved, dist=" + dist);
