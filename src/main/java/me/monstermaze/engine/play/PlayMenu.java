@@ -30,7 +30,6 @@ public final class PlayMenu {
         JCheckBox useDefaultMobs = new JCheckBox("Use mode default", true);
         JSpinner monsters = new JSpinner(new SpinnerNumberModel(150, 5, 300, 5));
         monsters.setEnabled(false);
-        JCheckBox aiBox = new JCheckBox("Start with AI");
 
         modeBox.addActionListener(e -> {
             MazeMode m = MazeMode.valueOf((String) modeBox.getSelectedItem());
@@ -55,8 +54,6 @@ public final class PlayMenu {
         p.add(layoutBox);
         p.add(useDefaultMobs);
         p.add(monsters);
-        p.add(new JLabel(""));
-        p.add(aiBox);
 
         JLabel hint = new JLabel("<html>Defaults: ORIGINAL/SPEED = 150, MODERN = 225</html>");
         hint.setFont(hint.getFont().deriveFont(11f));
@@ -73,7 +70,6 @@ public final class PlayMenu {
             int mobs = useDefaultMobs.isSelected() ? -1 : (Integer) monsters.getValue();
             menu.dispose();
             PlayFrame frame = new PlayFrame(mode, kit, layout, System.currentTimeMillis(), mobs);
-            if (aiBox.isSelected()) frame.setAiEnabled(true);
             frame.setVisible(true);
             frame.startLoop();
         });
