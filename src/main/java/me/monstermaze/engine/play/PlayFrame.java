@@ -5,7 +5,7 @@ import me.monstermaze.engine.audio.Sfx;
 import me.monstermaze.engine.game.EngineImpl;
 import me.monstermaze.engine.game.StageTimer;
 import me.monstermaze.engine.maze.Layouts;
-import me.monstermaze.engine.render.TopDownRenderer;
+import me.monstermaze.engine.render.PerspectiveRenderer;
 
 import javax.swing.*;
 import java.awt.*;
@@ -22,7 +22,7 @@ public final class PlayFrame extends JFrame {
 
     private final EngineImpl engine;
     private GameState state;
-    private final TopDownRenderer renderer;
+    private final PerspectiveRenderer renderer;
     private final GamePanel panel;
     private final JPanel hudBar;
     private final JLabel hudLine1;
@@ -33,6 +33,13 @@ public final class PlayFrame extends JFrame {
     private final MainMenu mainMenu;
     private final UiTheme theme;
     private double zoom;
+    private boolean firstPerson;
+    private float cameraYaw;
+    private float cameraPitch = -18.0f;
+    private double cameraDistance = 9.0;
+    private int lastMouseX;
+    private int lastMouseY;
+    private boolean dragging;
     private final int viewSize;
     private volatile boolean running = true;
     private volatile boolean paused = false;
@@ -61,7 +68,8 @@ public final class PlayFrame extends JFrame {
         int monsters = monsterOverride >= 0 ? monsterOverride : StageTimer.starterMonsters(mode);
         this.engine = new EngineImpl(monsters);
         this.state = engine.initialState(mode, layoutId, kit, seed);
-        this.renderer = new TopDownRenderer(6);
+        this.renderer = new PerspectiveRenderer();
+        this.cameraYaw = state.player.yaw;
         this.panel = new GamePanel();
 
         hudLine1 = new JLabel(" ");
@@ -108,6 +116,40 @@ public final class PlayFrame extends JFrame {
             }
         });
 
+
+        panel.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) {
+                requestFocusInWindow();
+                dragging = true;
+                lastMouseX = e.getX();
+                lastMouseY = e.getY();
+            }
+            @Override public void mouseReleased(MouseEvent e) {
+                dragging = false;
+            }
+        });
+        panel.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override public void mouseDragged(MouseEvent e) {
+                if (!dragging) return;
+                int dx = e.getX() - lastMouseX;
+                int dy = e.getY() - lastMouseY;
+                lastMouseX = e.getX();
+                lastMouseY = e.getY();
+                if (firstPerson) {
+                    state.player.yaw = normaliseYaw(state.player.yaw + dx * 0.45f);
+                    cameraYaw = state.player.yaw;
+                } else {
+                    cameraYaw = normaliseYaw(cameraYaw + dx * 0.45f);
+                }
+                cameraPitch = clamp(cameraPitch - dy * 0.30f, -70.0f, 30.0f);
+                panel.repaint();
+            }
+        });
+        panel.addMouseWheelListener(e -> {
+            cameraDistance = clamp(cameraDistance + e.getPreciseWheelRotation(), 4.0, 18.0);
+            panel.repaint();
+        });
+
         addKeyListener(new KeyAdapter() {
             private boolean sfxOn = PlayFrame.this.config.sfxEnabled;
             @Override public void keyPressed(KeyEvent e) {
@@ -129,6 +171,23 @@ public final class PlayFrame extends JFrame {
                 }
                 if (code == KeyEvent.VK_H) {
                     showHelp = !showHelp;
+                    panel.repaint();
+                    return;
+                }
+                if (code == KeyEvent.VK_F) {
+                    firstPerson = !firstPerson;
+                    cameraYaw = state.player.yaw;
+                    cameraPitch = firstPerson ? -4.0f : -18.0f;
+                    panel.repaint();
+                    return;
+                }
+                if (code == KeyEvent.VK_OPEN_BRACKET) {
+                    cameraDistance = Math.max(4.0, cameraDistance - 1.0);
+                    panel.repaint();
+                    return;
+                }
+                if (code == KeyEvent.VK_CLOSE_BRACKET) {
+                    cameraDistance = Math.min(18.0, cameraDistance + 1.0);
                     panel.repaint();
                     return;
                 }
@@ -226,7 +285,8 @@ public final class PlayFrame extends JFrame {
 
     private String formatLine1(GameState s) {
         return String.format("  Stage %d  \u00b7  peak %d  \u00b7  %ds  \u00b7  %s  \u00b7  %s",
-                s.stage, peakStage, s.phaseTimerTicks / 20, displayKit(s.player.kit), s.phase);
+                s.stage, peakStage, s.phaseTimerTicks / 20, displayKit(s.player.kit), s.phase,
+                firstPerson ? "1P" : "3P");
     }
 
     private String formatLine2(GameState s) {
@@ -272,8 +332,9 @@ public final class PlayFrame extends JFrame {
             super.paintComponent(g0);
             Graphics2D g = (Graphics2D) g0;
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            BufferedImage img = renderer.renderCamera(state, getSize(), zoom);
-            g.drawImage(img, 0, 0, null);
+            PerspectiveRenderer.BufferedFrame frame =
+                    renderer.render(state, getSize(), firstPerson, cameraYaw, cameraPitch, cameraDistance);
+            g.drawImage(frame.image(), 0, 0, null);
             drawMinimap(g);
             if (showHelp) drawHelp(g);
             if (paused) drawPause(g);
@@ -319,8 +380,8 @@ public final class PlayFrame extends JFrame {
         private void drawHelp(Graphics2D g) {
             String[] lines = {
                     "WASD move   Arrows turn   Space jump   Shift sprint",
-                    "Q primary   E enhanced   +/- zoom   M mute",
-                    "P pause   H hide help   Esc pause / menu"
+                    "Q primary   E enhanced   P pause   F first-person",
+                    "Drag mouse camera   Wheel/[ ] distance   H help   Esc menu"
             };
             int pad = 10, lineH = 16, w = 420;
             int h = lines.length * lineH + pad * 2;
@@ -358,6 +419,20 @@ public final class PlayFrame extends JFrame {
             FontMetrics fm = g.getFontMetrics();
             g.drawString(msg, (getWidth() - fm.stringWidth(msg)) / 2, getHeight() / 2);
         }
+    }
+
+    private static float normaliseYaw(float yaw) {
+        while (yaw >= 180.0f) yaw -= 360.0f;
+        while (yaw < -180.0f) yaw += 360.0f;
+        return yaw;
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     public static void main(String[] args) {
