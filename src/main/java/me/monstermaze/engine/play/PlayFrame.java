@@ -32,7 +32,6 @@ public final class PlayFrame extends JFrame {
     private final GameConfig config;
     private final MainMenu mainMenu;
     private final UiTheme theme;
-    private float yaw = 0f;
     private double zoom;
     private final int viewSize;
     private volatile boolean running = true;
@@ -184,22 +183,25 @@ public final class PlayFrame extends JFrame {
             return;
         }
 
-        if (keys.contains(KeyEvent.VK_LEFT)) yaw -= 6f;
-        if (keys.contains(KeyEvent.VK_RIGHT)) yaw += 6f;
-        double moveX = 0, moveZ = 0;
-        if (keys.contains(KeyEvent.VK_W) || keys.contains(KeyEvent.VK_UP)) moveZ += 1;
-        if (keys.contains(KeyEvent.VK_S) || keys.contains(KeyEvent.VK_DOWN)) moveZ -= 1;
-        if (keys.contains(KeyEvent.VK_A)) moveX -= 1;
-        if (keys.contains(KeyEvent.VK_D)) moveX += 1;
+        float yawDelta = 0.0f;
+        if (keys.contains(KeyEvent.VK_LEFT)) yawDelta -= 6.0f;
+        if (keys.contains(KeyEvent.VK_RIGHT)) yawDelta += 6.0f;
 
-        Action action = new Action(moveX, moveZ,
+        double strafe = 0.0, forward = 0.0;
+        if (keys.contains(KeyEvent.VK_W) || keys.contains(KeyEvent.VK_UP)) forward += 1.0;
+        if (keys.contains(KeyEvent.VK_S) || keys.contains(KeyEvent.VK_DOWN)) forward -= 1.0;
+        if (keys.contains(KeyEvent.VK_A)) strafe -= 1.0;
+        if (keys.contains(KeyEvent.VK_D)) strafe += 1.0;
+
+        boolean jump = keys.contains(KeyEvent.VK_SPACE);
+        boolean ability = keys.contains(KeyEvent.VK_Q) || keys.contains(KeyEvent.VK_E);
+        Action action = new Action(
+                forward, strafe,
+                jump,
                 keys.contains(KeyEvent.VK_SHIFT),
-                keys.contains(KeyEvent.VK_SPACE),
-                keys.contains(KeyEvent.VK_SPACE),
-                yaw, 0f,
-                keys.contains(KeyEvent.VK_Q),
-                keys.contains(KeyEvent.VK_E),
-                null);
+                yawDelta,
+                ability
+        );
 
         TickResult result = engine.tick(state, action);
         Sfx.playEvents(result.events);
@@ -230,11 +232,13 @@ public final class PlayFrame extends JFrame {
         if (p.kit == KitType.JUMPER) sb.append("Jumps ").append(p.jumpCharges);
         else if (p.kit == KitType.SLOWBALL) {
             sb.append("Balls ").append(p.abilityCharges);
-            if (p.enhancedCooldownTicks > 0) sb.append("  Cryo ").append(p.enhancedCooldownTicks / 20).append('s');
+            long cooldown = Math.max(0L, p.abilityCooldownUntilTick - s.tick);
+            if (cooldown > 0) sb.append("  Cryo ").append(cooldown / 20).append('s');
         } else if (p.kit == KitType.REPULSOR) sb.append("Charges ").append(p.abilityCharges);
         else if (p.kit == KitType.BODY_BUILDER) {
-            sb.append("Rush ").append(p.abilityCharges);
-            if (p.abilityCooldownTicks > 0) sb.append(String.format("  %.1fs", p.abilityCooldownTicks / 20.0));
+            sb.append("Rush ").append(p.abilityActivations);
+            long remaining = Math.max(0L, p.abilityActiveUntilTick - s.tick);
+            if (remaining > 0) sb.append(String.format("  %.1fs", remaining / 20.0));
         } else sb.append("Maverick");
         sb.append("  \u00b7  Mobs ").append(s.monsters.size());
         sb.append(String.format("  \u00b7  zoom %.1fx", zoom));
