@@ -35,8 +35,11 @@ public final class MonsterMazeBumpModel {
             }
 
             boolean wasGrounded = p.onGround;
-            if (wasGrounded) {
-                p.pos = new Vec3(p.pos.x, p.pos.y + 0.7, p.pos.z);
+            double aboveFloor = p.pos.y - game.centerY;
+            if (aboveFloor >= 0.0 && aboveFloor < 0.9) {
+                // Source checks the player's actual height above the arena floor,
+                // not the server grounded flag, before raising them to +0.7.
+                p.pos = new Vec3(p.pos.x, game.centerY + 0.7, p.pos.z);
             }
 
             double dx = p.pos.x - m.pos.x;
