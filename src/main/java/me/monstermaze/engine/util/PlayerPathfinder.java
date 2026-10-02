@@ -3,127 +3,108 @@ package me.monstermaze.engine.util;
 import me.monstermaze.engine.maze.Layouts;
 import me.monstermaze.engine.maze.MazeGraph;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
- * Physical player routing matching MonsterMazeAI's path semantics:
- * cardinal floor edges plus one-block gap-jump edges, with fewest turns as
- * the tie-breaker.
+ * Player route semantics matching MonsterMazeAI's PlayerPathfinder exactly:
+ * ordinary cardinal floor edges first, then one-cell gap edges, using BFS.
  */
 public final class PlayerPathfinder {
+
     public List<int[]> shortestPathToRegion(MazeGraph maze, int startR, int startC,
                                             int goalR, int goalC, int radius) {
-        if (radius < 0) throw new IllegalArgumentException("radius");
-        return search(maze, startR, startC, goalR, goalC, radius, true, true);
+        if (radius < 0) throw new IllegalArgumentException("radius must be non-negative");
+        return shortestPathToRegion(maze, startR, startC, goalR, goalC, radius, true);
     }
 
     public List<int[]> shortestPath(MazeGraph maze, int startR, int startC,
                                     int goalR, int goalC) {
-        return search(maze, startR, startC, goalR, goalC, 0, true, false);
+        return shortestPath(maze, startR, startC, goalR, goalC, true);
     }
 
-    private List<int[]> search(MazeGraph maze, int startR, int startC,
-                               int goalR, int goalC, int radius,
-                               boolean allowGaps, boolean regionGoal) {
+    private List<int[]> shortestPath(MazeGraph maze, int startR, int startC,
+                                     int goalR, int goalC, boolean allowGaps) {
+        if (!physical(maze, startR, startC) || !physical(maze, goalR, goalC)) return List.of();
+
+        ArrayDeque<Cell> queue = new ArrayDeque<>();
+        Map<Cell, Cell> previous = new HashMap<>();
+        queue.add(new Cell(startR, startC));
+        previous.put(new Cell(startR, startC), null);
+
+        while (!queue.isEmpty()) {
+            Cell current = queue.removeFirst();
+            if (current.r == goalR && current.c == goalC) {
+                return reconstruct(previous, current);
+            }
+
+            int r = current.r, c = current.c;
+            add(maze, current, new Cell(r - 1, c), queue, previous);
+            add(maze, current, new Cell(r + 1, c), queue, previous);
+            add(maze, current, new Cell(r, c - 1), queue, previous);
+            add(maze, current, new Cell(r, c + 1), queue, previous);
+
+            if (allowGaps) {
+                addMovement(maze, current, new Cell(r - 2, c), queue, previous);
+                addMovement(maze, current, new Cell(r + 2, c), queue, previous);
+                addMovement(maze, current, new Cell(r, c - 2), queue, previous);
+                addMovement(maze, current, new Cell(r, c + 2), queue, previous);
+            }
+        }
+        return List.of();
+    }
+
+    private List<int[]> shortestPathToRegion(MazeGraph maze, int startR, int startC,
+                                             int goalR, int goalC, int radius,
+                                             boolean allowGaps) {
         if (!physical(maze, startR, startC)) return List.of();
 
-        PriorityQueue<Node> open = new PriorityQueue<>(Comparator
-                .comparingInt((Node n) -> n.edges)
-                .thenComparingInt(n -> n.turns)
-                .thenComparingInt(n -> n.r)
-                .thenComparingInt(n -> n.c)
-                .thenComparingInt(n -> n.direction));
+        ArrayDeque<Cell> queue = new ArrayDeque<>();
+        Map<Cell, Cell> previous = new HashMap<>();
+        Map<Cell, Integer> distance = new HashMap<>();
+        Cell start = new Cell(startR, startC);
+        queue.add(start);
+        previous.put(start, null);
+        distance.put(start, 0);
 
-        Map<Key, Cost> best = new HashMap<>();
-        Map<Key, Key> previous = new HashMap<>();
+        int bestDistance = Integer.MAX_VALUE;
+        Cell bestGoal = null;
 
-        Key startKey = new Key(startR, startC, -1);
-        best.put(startKey, new Cost(0, 0));
-        previous.put(startKey, null);
-        open.add(new Node(startR, startC, -1, 0, 0));
+        while (!queue.isEmpty()) {
+            Cell current = queue.removeFirst();
+            int currentDistance = distance.get(current);
+            if (currentDistance > bestDistance) break;
 
-        Node bestGoal = null;
-        while (!open.isEmpty()) {
-            Node current = open.poll();
-            Key currentKey = new Key(current.r, current.c, current.direction);
-            Cost known = best.get(currentKey);
-            if (known == null || known.edges != current.edges || known.turns != current.turns) continue;
-
-            boolean reached = regionGoal
-                    ? Math.abs(current.r - goalR) <= radius
-                        && Math.abs(current.c - goalC) <= radius
-                    : current.r == goalR && current.c == goalC;
-
-            if (reached) {
-                if (bestGoal == null || compareGoal(current, bestGoal, goalR, goalC) < 0) {
+            if (Math.abs(current.r - goalR) <= radius
+                    && Math.abs(current.c - goalC) <= radius) {
+                if (bestGoal == null || compareRegionGoal(current, bestGoal, goalR, goalC) < 0) {
                     bestGoal = current;
+                    bestDistance = currentDistance;
                 }
-                if (!regionGoal) break;
-                if (!open.isEmpty() && open.peek().edges > current.edges) break;
                 continue;
             }
 
-            for (int direction = 0; direction < 4; direction++) {
-                int nr = current.r;
-                int nc = current.c;
-                switch (direction) {
-                    case 0 -> nr--;
-                    case 1 -> nr++;
-                    case 2 -> nc--;
-                    default -> nc++;
-                }
-                relax(maze, current, nr, nc, direction, open, best, previous);
-            }
+            int r = current.r, c = current.c;
+            add(maze, current, new Cell(r - 1, c), queue, previous, distance, currentDistance + 1);
+            add(maze, current, new Cell(r + 1, c), queue, previous, distance, currentDistance + 1);
+            add(maze, current, new Cell(r, c - 1), queue, previous, distance, currentDistance + 1);
+            add(maze, current, new Cell(r, c + 1), queue, previous, distance, currentDistance + 1);
 
             if (allowGaps) {
-                int[] rs = {current.r - 2, current.r + 2, current.r, current.r};
-                int[] cs = {current.c, current.c, current.c - 2, current.c + 2};
-                for (int i = 0; i < 4; i++) {
-                    if (isGapEdge(maze, current.r, current.c, rs[i], cs[i])) {
-                        relax(maze, current, rs[i], cs[i], i, open, best, previous);
-                    }
-                }
+                addMovement(maze, current, new Cell(r - 2, c), queue, previous, distance, currentDistance + 1);
+                addMovement(maze, current, new Cell(r + 2, c), queue, previous, distance, currentDistance + 1);
+                addMovement(maze, current, new Cell(r, c - 2), queue, previous, distance, currentDistance + 1);
+                addMovement(maze, current, new Cell(r, c + 2), queue, previous, distance, currentDistance + 1);
             }
         }
 
-        if (bestGoal == null) return List.of();
-
-        ArrayList<int[]> path = new ArrayList<>();
-        Key at = new Key(bestGoal.r, bestGoal.c, bestGoal.direction);
-        while (at != null) {
-            path.add(new int[]{at.r, at.c});
-            at = previous.get(at);
-        }
-        Collections.reverse(path);
-        return path;
+        return bestGoal == null ? List.of() : reconstruct(previous, bestGoal);
     }
 
-    private void relax(MazeGraph maze, Node current, int nr, int nc, int direction,
-                       PriorityQueue<Node> open, Map<Key, Cost> best,
-                       Map<Key, Key> previous) {
-        if (!physical(maze, nr, nc)) return;
-
-        int turns = current.turns;
-        if (current.direction >= 0 && current.direction != direction) turns++;
-
-        Key key = new Key(nr, nc, direction);
-        Cost candidate = new Cost(current.edges + 1, turns);
-        Cost prior = best.get(key);
-        if (prior != null && compareCost(candidate, prior) >= 0) return;
-
-        best.put(key, candidate);
-        previous.put(key, new Key(current.r, current.c, current.direction));
-        open.add(new Node(nr, nc, direction, candidate.edges, candidate.turns));
-    }
-
-    private static int compareCost(Cost a, Cost b) {
-        int edges = Integer.compare(a.edges, b.edges);
-        return edges != 0 ? edges : Integer.compare(a.turns, b.turns);
-    }
-
-    private static int compareGoal(Node a, Node b, int goalR, int goalC) {
-        if (a.edges != b.edges) return Integer.compare(a.edges, b.edges);
-        if (a.turns != b.turns) return Integer.compare(a.turns, b.turns);
+    private static int compareRegionGoal(Cell a, Cell b, int goalR, int goalC) {
         int da = Math.abs(a.r - goalR) + Math.abs(a.c - goalC);
         int db = Math.abs(b.r - goalR) + Math.abs(b.c - goalC);
         if (da != db) return Integer.compare(da, db);
@@ -136,20 +117,67 @@ public final class PlayerPathfinder {
                 && maze.isPhysicalFloor(r, c);
     }
 
-    private static boolean isGapEdge(MazeGraph maze, int r1, int c1, int r2, int c2) {
-        int dr = r2 - r1;
-        int dc = c2 - c1;
-        if (!((Math.abs(dr) == 2 && dc == 0) || (Math.abs(dc) == 2 && dr == 0))) {
-            return false;
-        }
-        int mr = r1 + Integer.signum(dr);
-        int mc = c1 + Integer.signum(dc);
-        return physical(maze, r1, c1)
-                && !physical(maze, mr, mc)
-                && physical(maze, r2, c2);
+    private static void add(MazeGraph maze, Cell current, Cell next,
+                            ArrayDeque<Cell> queue, Map<Cell, Cell> previous) {
+        if (!physical(maze, next.r, next.c) || previous.containsKey(next)) return;
+        previous.put(next, current);
+        queue.addLast(next);
     }
 
-    private record Key(int r, int c, int direction) {}
-    private record Cost(int edges, int turns) {}
-    private record Node(int r, int c, int direction, int edges, int turns) {}
+    private static void addMovement(MazeGraph maze, Cell current, Cell next,
+                                    ArrayDeque<Cell> queue, Map<Cell, Cell> previous) {
+        if (!isGapEdge(maze, current, next) || previous.containsKey(next)) return;
+        previous.put(next, current);
+        queue.addLast(next);
+    }
+
+    private static void add(MazeGraph maze, Cell current, Cell next,
+                            ArrayDeque<Cell> queue, Map<Cell, Cell> previous,
+                            Map<Cell, Integer> distance, int nextDistance) {
+        if (!physical(maze, next.r, next.c) || previous.containsKey(next)) return;
+        previous.put(next, current);
+        distance.put(next, nextDistance);
+        queue.addLast(next);
+    }
+
+    private static void addMovement(MazeGraph maze, Cell current, Cell next,
+                                    ArrayDeque<Cell> queue, Map<Cell, Cell> previous,
+                                    Map<Cell, Integer> distance, int nextDistance) {
+        if (!isGapEdge(maze, current, next) || previous.containsKey(next)) return;
+        previous.put(next, current);
+        distance.put(next, nextDistance);
+        queue.addLast(next);
+    }
+
+    private static boolean isGapEdge(MazeGraph maze, Cell from, Cell to) {
+        int dr = to.r - from.r, dc = to.c - from.c;
+        if (!((Math.abs(dr) == 2 && dc == 0) || (Math.abs(dc) == 2 && dr == 0))) return false;
+        int middleR = from.r + Integer.signum(dr);
+        int middleC = from.c + Integer.signum(dc);
+        return physical(maze, from.r, from.c)
+                && !physical(maze, middleR, middleC)
+                && physical(maze, to.r, to.c);
+    }
+
+    private static List<int[]> reconstruct(Map<Cell, Cell> previous, Cell goal) {
+        ArrayList<int[]> path = new ArrayList<>();
+        for (Cell at = goal; at != null; at = previous.get(at)) {
+            path.add(new int[]{at.r, at.c});
+        }
+        java.util.Collections.reverse(path);
+        return path;
+    }
+
+    private static final class Cell {
+        final int r, c;
+        Cell(int r, int c) { this.r = r; this.c = c; }
+
+        @Override public boolean equals(Object o) {
+            return o instanceof Cell other && r == other.r && c == other.c;
+        }
+
+        @Override public int hashCode() {
+            return 31 * r + c;
+        }
+    }
 }
