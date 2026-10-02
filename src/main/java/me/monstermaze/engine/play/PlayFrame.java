@@ -204,8 +204,7 @@ public final class PlayFrame extends JFrame {
                 } else if (code == KeyEvent.VK_0) {
                     zoom = PlayFrame.this.config.zoom;
                     cameraDistance = 9.0 / Math.max(0.8, Math.min(6.0, zoom));
-                } else
-                else if (code == KeyEvent.VK_M) { sfxOn = !sfxOn; Sfx.setEnabled(sfxOn); }
+                } else if (code == KeyEvent.VK_M) { sfxOn = !sfxOn; Sfx.setEnabled(sfxOn); }
                 keys.add(code);
             }
             @Override public void keyReleased(KeyEvent e) { keys.remove(e.getKeyCode()); }
