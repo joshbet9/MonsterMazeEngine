@@ -129,7 +129,10 @@ public final class EngineImpl implements MonsterMazeEngine {
         }
 
         if (state.phase == GamePhase.LIVE || state.phase == GamePhase.STARTING) {
-            KitSimulator.tickResources(state.player, state.mode, currentTick);
+            // Match Simulator.tick(): abilities are resolved before movement.
+            KitSimulator.activate(state.player, state.monsters, action, state.mode,
+                    state.activePad, state.previewPad, currentTick);
+
             boolean canUseNormalJump = state.player.kit != KitType.JUMPER
                     || state.player.jumpCharges > 0;
             int jumpAmplifier = canUseNormalJump ? 0 : -10;
@@ -140,9 +143,6 @@ public final class EngineImpl implements MonsterMazeEngine {
                     SafePadSimulator.isOn(state.activePad, state.player.pos)
                             || SafePadSimulator.isOn(state.previewPad, state.player.pos)
                             || onOldPad(state, state.player);
-
-            KitSimulator.activate(state.player, state.monsters, action, state.mode,
-                    state.activePad, state.previewPad, currentTick);
 
             MonsterSimulator monsters = new MonsterSimulator(
                     graph, centerX, centerY, centerZ, monsterRandom, 1.4, currentTick);
