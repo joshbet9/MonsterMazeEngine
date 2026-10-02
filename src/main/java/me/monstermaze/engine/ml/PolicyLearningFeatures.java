@@ -169,13 +169,15 @@ public final class PolicyLearningFeatures {
         f[42] = clamp(action.yawDelta / 30.0, -1.0, 1.0);
         f[43] = action.useAbility ? 1.0 : 0.0;
 
-        double[] route = routeContext(state, playerRow, playerCol,
+        double[] route = routeContext(state, graph, playerRow, playerCol,
                 activeRow, activeCol, forwardX, forwardZ, strafeX, strafeZ);
         System.arraycopy(route, 0, f, 44, route.length);
         return f;
     }
 
-    private static double[] routeContext(GameState state, int playerRow, int playerCol,
+    private static double[] routeContext(GameState state,
+                                         me.monstermaze.engine.maze.MazeGraph graph,
+                                         int playerRow, int playerCol,
                                          int activeRow, int activeCol,
                                          double forwardX, double forwardZ,
                                          double strafeX, double strafeZ) {
