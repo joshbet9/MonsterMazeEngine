@@ -17,21 +17,27 @@ import java.awt.image.BufferedImage;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Local playable Monster Maze. Esc returns to main menu when launched from MainMenu. */
+/** In-game: dark HUD, HP bar, pause, controls help, minimap. */
 public final class PlayFrame extends JFrame {
 
     private final EngineImpl engine;
     private GameState state;
     private final TopDownRenderer renderer;
     private final GamePanel panel;
-    private final JLabel hud;
+    private final JPanel hudBar;
+    private final JLabel hudLine1;
+    private final JLabel hudLine2;
+    private final JProgressBar hpBar;
     private final Set<Integer> keys = ConcurrentHashMap.newKeySet();
     private final GameConfig config;
     private final MainMenu mainMenu;
+    private final UiTheme theme;
     private float yaw = 0f;
     private double zoom;
     private final int viewSize;
     private volatile boolean running = true;
+    private volatile boolean paused = false;
+    private boolean showHelp;
     private int peakStage = 0;
     private long runStartMs = System.currentTimeMillis();
     private boolean endShown = false;
@@ -45,26 +51,52 @@ public final class PlayFrame extends JFrame {
         super("Monster Maze \u2014 " + displayKit(kit));
         this.config = config != null ? config : GameConfig.load();
         this.mainMenu = mainMenu;
+        this.theme = UiTheme.of(this.config.darkMode);
         this.zoom = this.config.zoom;
         this.viewSize = this.config.windowSize;
+        this.showHelp = this.config.showControlsHint;
         Sfx.setEnabled(this.config.sfxEnabled);
+        theme.applyLookAndFeel();
 
         int monsters = monsterOverride >= 0 ? monsterOverride : StageTimer.starterMonsters(mode);
         this.engine = new EngineImpl(monsters);
         this.state = engine.initialState(mode, layoutId, kit, seed);
         this.renderer = new TopDownRenderer(6);
         this.panel = new GamePanel();
-        this.hud = new JLabel(" ");
-        hud.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        hud.setForeground(Color.WHITE);
-        hud.setOpaque(true);
-        hud.setBackground(new Color(18, 18, 26));
-        hud.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+
+        hudLine1 = new JLabel(" ");
+        hudLine2 = new JLabel(" ");
+        hudLine1.setFont(new Font(Font.MONOSPACED, Font.BOLD, 13));
+        hudLine2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        hudLine1.setForeground(theme.text);
+        hudLine2.setForeground(theme.textMuted);
+
+        hpBar = new JProgressBar(0, 100);
+        hpBar.setValue(100);
+        hpBar.setStringPainted(true);
+        hpBar.setString("HP");
+        hpBar.setForeground(theme.success);
+        hpBar.setBackground(theme.bgPanel);
+        hpBar.setPreferredSize(new Dimension(120, 18));
+
+        hudBar = new JPanel(new BorderLayout(10, 4));
+        hudBar.setBackground(theme.bgRaised);
+        hudBar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, theme.border),
+                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
+        JPanel hudText = new JPanel();
+        hudText.setLayout(new BoxLayout(hudText, BoxLayout.Y_AXIS));
+        hudText.setOpaque(false);
+        hudText.add(hudLine1);
+        hudText.add(hudLine2);
+        hudBar.add(hudText, BorderLayout.CENTER);
+        hudBar.add(hpBar, BorderLayout.EAST);
 
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout());
-        add(hud, BorderLayout.NORTH);
+        add(hudBar, BorderLayout.NORTH);
         add(panel, BorderLayout.CENTER);
+        getContentPane().setBackground(theme.bg);
         setResizable(false);
         pack();
         setLocationRelativeTo(null);
@@ -79,16 +111,32 @@ public final class PlayFrame extends JFrame {
         addKeyListener(new KeyAdapter() {
             private boolean sfxOn = PlayFrame.this.config.sfxEnabled;
             @Override public void keyPressed(KeyEvent e) {
-                keys.add(e.getKeyCode());
                 int code = e.getKeyCode();
+                if (code == KeyEvent.VK_ESCAPE) {
+                    if (paused || state.phase == GamePhase.ENDING) {
+                        running = false;
+                        dispose();
+                    } else {
+                        paused = true;
+                        panel.repaint();
+                    }
+                    return;
+                }
+                if (code == KeyEvent.VK_P) {
+                    paused = !paused;
+                    panel.repaint();
+                    return;
+                }
+                if (code == KeyEvent.VK_H) {
+                    showHelp = !showHelp;
+                    panel.repaint();
+                    return;
+                }
                 if (code == KeyEvent.VK_EQUALS || code == KeyEvent.VK_ADD) zoom = Math.min(6.0, zoom + 0.25);
                 else if (code == KeyEvent.VK_MINUS || code == KeyEvent.VK_SUBTRACT) zoom = Math.max(0.8, zoom - 0.25);
                 else if (code == KeyEvent.VK_0) zoom = PlayFrame.this.config.zoom;
                 else if (code == KeyEvent.VK_M) { sfxOn = !sfxOn; Sfx.setEnabled(sfxOn); }
-                else if (code == KeyEvent.VK_ESCAPE) {
-                    running = false;
-                    dispose();
-                }
+                keys.add(code);
             }
             @Override public void keyReleased(KeyEvent e) { keys.remove(e.getKeyCode()); }
         });
@@ -102,7 +150,8 @@ public final class PlayFrame extends JFrame {
             long next = System.nanoTime();
             while (running) {
                 try {
-                    tickOnce();
+                    if (!paused) tickOnce();
+                    else SwingUtilities.invokeLater(panel::repaint);
                     long now = System.nanoTime();
                     long sleep = (next + frameNanos - now) / 1_000_000L;
                     next += frameNanos;
@@ -126,8 +175,8 @@ public final class PlayFrame extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     panel.repaint();
                     JOptionPane.showMessageDialog(this,
-                            "Eliminated!\nPeak stage: " + stage + "\nTime: " + secs + "s\nMobs at end: " + mobs
-                                    + (mainMenu != null ? "\n\n(Close or Esc to return to menu)" : ""),
+                            "Eliminated!\nPeak stage: " + stage + "\nTime: " + secs + "s\nMobs: " + mobs
+                                    + "\n\nEsc \u2192 menu",
                             "Run over", JOptionPane.INFORMATION_MESSAGE);
                 });
             }
@@ -157,27 +206,40 @@ public final class PlayFrame extends JFrame {
         state = result.next;
         if (state.stage > peakStage) peakStage = state.stage;
 
-        final String hudText = formatHud(state);
-        SwingUtilities.invokeLater(() -> { hud.setText(hudText); panel.repaint(); });
+        final String l1 = formatLine1(state);
+        final String l2 = formatLine2(state);
+        final int hpPct = (int) Math.round(100.0 * state.player.health / Math.max(1.0, state.player.maxHealth));
+        SwingUtilities.invokeLater(() -> {
+            hudLine1.setText(l1);
+            hudLine2.setText(l2);
+            hpBar.setValue(Math.max(0, Math.min(100, hpPct)));
+            hpBar.setString(String.format("HP %.0f", state.player.health));
+            hpBar.setForeground(hpPct > 40 ? theme.success : theme.danger);
+            panel.repaint();
+        });
     }
 
-    private String formatHud(GameState s) {
+    private String formatLine1(GameState s) {
+        return String.format("  Stage %d  \u00b7  peak %d  \u00b7  %ds  \u00b7  %s  \u00b7  %s",
+                s.stage, peakStage, s.phaseTimerTicks / 20, displayKit(s.player.kit), s.phase);
+    }
+
+    private String formatLine2(GameState s) {
         PlayerState p = s.player;
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("  Stage %d (peak %d)  Timer %ds  HP %.0f/%.0f  %s",
-                s.stage, peakStage, s.phaseTimerTicks / 20, p.health, p.maxHealth, displayKit(p.kit)));
-        if (p.kit == KitType.JUMPER) sb.append("  Jumps ").append(p.jumpCharges);
+        StringBuilder sb = new StringBuilder("  ");
+        if (p.kit == KitType.JUMPER) sb.append("Jumps ").append(p.jumpCharges);
         else if (p.kit == KitType.SLOWBALL) {
-            sb.append("  Balls ").append(p.abilityCharges);
+            sb.append("Balls ").append(p.abilityCharges);
             if (p.enhancedCooldownTicks > 0) sb.append("  Cryo ").append(p.enhancedCooldownTicks / 20).append('s');
-        } else if (p.kit == KitType.REPULSOR) sb.append("  Charges ").append(p.abilityCharges);
+        } else if (p.kit == KitType.REPULSOR) sb.append("Charges ").append(p.abilityCharges);
         else if (p.kit == KitType.BODY_BUILDER) {
-            sb.append("  Rush ").append(p.abilityCharges);
+            sb.append("Rush ").append(p.abilityCharges);
             if (p.abilityCooldownTicks > 0) sb.append(String.format("  %.1fs", p.abilityCooldownTicks / 20.0));
-        }
-        sb.append(String.format("  Mobs %d  %s  zoom %.1fx", s.monsters.size(), s.phase, zoom));
-        if (p.onSafePad) sb.append("  [PAD]");
-        sb.append("   Esc=menu  +/- zoom  M=mute");
+        } else sb.append("Maverick");
+        sb.append("  \u00b7  Mobs ").append(s.monsters.size());
+        sb.append(String.format("  \u00b7  zoom %.1fx", zoom));
+        if (p.onSafePad) sb.append("  \u00b7  ON PAD");
+        if (paused) sb.append("  \u00b7  PAUSED");
         return sb.toString();
     }
 
@@ -195,43 +257,99 @@ public final class PlayFrame extends JFrame {
     private final class GamePanel extends JPanel {
         GamePanel() {
             setPreferredSize(new Dimension(viewSize, viewSize));
-            setBackground(Color.BLACK);
+            setBackground(theme.bg);
         }
 
         @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
+        protected void paintComponent(Graphics g0) {
+            super.paintComponent(g0);
+            Graphics2D g = (Graphics2D) g0;
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             BufferedImage img = renderer.renderCamera(state, getSize(), zoom);
             g.drawImage(img, 0, 0, null);
-            drawMinimap((Graphics2D) g);
+            drawMinimap(g);
+            if (showHelp) drawHelp(g);
+            if (paused) drawPause(g);
+            if (state.phase == GamePhase.ENDING) drawEliminated(g);
         }
 
         private void drawMinimap(Graphics2D g) {
-            int ms = 110;
-            int ox = getWidth() - ms - 10;
-            int oy = 10;
-            g.setColor(new Color(0, 0, 0, 160));
-            g.fillRoundRect(ox - 2, oy - 2, ms + 4, ms + 4, 6, 6);
+            int ms = 120;
+            int ox = getWidth() - ms - 12;
+            int oy = 12;
+            g.setColor(new Color(0, 0, 0, 170));
+            g.fillRoundRect(ox - 4, oy - 4, ms + 8, ms + 8, 8, 8);
+            g.setColor(theme.border);
+            g.drawRoundRect(ox - 4, oy - 4, ms + 8, ms + 8, 8, 8);
             double scale = ms / (double) Layouts.SIZE;
             boolean[][] trav = state.maze.traversable;
             for (int r = 0; r < Layouts.SIZE; r += 2) {
                 for (int c = 0; c < Layouts.SIZE; c += 2) {
                     if (trav[r][c]) {
-                        g.setColor(new Color(70, 70, 80));
+                        g.setColor(new Color(70, 74, 90));
                         g.fillRect(ox + (int) (c * scale), oy + (int) (r * scale), 2, 2);
                     }
                 }
             }
+            if (state.previewPad != null) {
+                int pr = state.previewPad.centerX + Layouts.HALF;
+                int pc = state.previewPad.centerZ + Layouts.HALF;
+                g.setColor(new Color(255, 220, 80));
+                g.fillRect(ox + (int) (pc * scale) - 2, oy + (int) (pr * scale) - 2, 5, 5);
+            }
             if (state.activePad != null) {
                 int pr = state.activePad.centerX + Layouts.HALF;
                 int pc = state.activePad.centerZ + Layouts.HALF;
-                g.setColor(new Color(80, 255, 120));
+                g.setColor(theme.success);
                 g.fillRect(ox + (int) (pc * scale) - 2, oy + (int) (pr * scale) - 2, 5, 5);
             }
             int pr = (int) Math.floor(state.player.pos.x) + Layouts.HALF;
             int pc = (int) Math.floor(state.player.pos.z) + Layouts.HALF;
-            g.setColor(new Color(100, 200, 255));
-            g.fillOval(ox + (int) (pc * scale) - 2, oy + (int) (pr * scale) - 2, 5, 5);
+            g.setColor(theme.accent);
+            g.fillOval(ox + (int) (pc * scale) - 3, oy + (int) (pr * scale) - 3, 6, 6);
+        }
+
+        private void drawHelp(Graphics2D g) {
+            String[] lines = {
+                    "WASD move   Arrows turn   Space jump   Shift sprint",
+                    "Q primary   E enhanced   +/- zoom   M mute",
+                    "P pause   H hide help   Esc pause / menu"
+            };
+            int pad = 10, lineH = 16, w = 420;
+            int h = lines.length * lineH + pad * 2;
+            int x = 12, y = getHeight() - h - 12;
+            g.setColor(new Color(0, 0, 0, 180));
+            g.fillRoundRect(x, y, w, h, 8, 8);
+            g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+            g.setColor(theme.text);
+            for (int i = 0; i < lines.length; i++) {
+                g.drawString(lines[i], x + pad, y + pad + (i + 1) * lineH - 4);
+            }
+        }
+
+        private void drawPause(Graphics2D g) {
+            g.setColor(new Color(0, 0, 0, 140));
+            g.fillRect(0, 0, getWidth(), getHeight());
+            g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 36));
+            g.setColor(theme.text);
+            String msg = "PAUSED";
+            FontMetrics fm = g.getFontMetrics();
+            g.drawString(msg, (getWidth() - fm.stringWidth(msg)) / 2, getHeight() / 2 - 10);
+            g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
+            g.setColor(theme.textMuted);
+            String sub = "P resume   \u00b7   Esc main menu";
+            fm = g.getFontMetrics();
+            g.drawString(sub, (getWidth() - fm.stringWidth(sub)) / 2, getHeight() / 2 + 24);
+        }
+
+        private void drawEliminated(Graphics2D g) {
+            g.setColor(new Color(40, 0, 0, 120));
+            g.fillRect(0, 0, getWidth(), getHeight());
+            g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 28));
+            g.setColor(theme.danger);
+            String msg = "ELIMINATED";
+            FontMetrics fm = g.getFontMetrics();
+            g.drawString(msg, (getWidth() - fm.stringWidth(msg)) / 2, getHeight() / 2);
         }
     }
 
