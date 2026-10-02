@@ -2,26 +2,23 @@
 
 ## Done
 
-- Engine core (maze, physics, monsters, pads, kits, timer)
-- Trace harness + top-down PNG renderer
-- **Playable local game**
-  - `PlayMenu` kit/mode/layout select
-  - `PlayFrame` 20 TPS Swing window + HUD
-  - Controls: WASD move, arrows turn, Space jump, Shift sprint, Q primary, E enhanced
-- **Center deterioration** disables graph cells as the stage progresses
+- Full 1.8 engine (maze, physics, kits, pads, monsters, timer, center det)
+- **Playable game** with camera follow + zoom
+- **HeuristicAgent** on the shared Action API (`F` in-game, or `--ai` / menu checkbox)
+- **Procedural SFX** (hit, pad, ability, stage, death) — mute with `M`
+- **Mode-default mobs**: ORIGINAL/SPEED = 150, MODERN = 225 (override optional)
+- Clearer path checkerboard, pad borders + beacon, player facing line
 
-## Run the game
+## Run
 
 ```bash
 mvn -q package
 java -cp target/classes me.monstermaze.engine.play.PlayMenu
-# or directly:
-java -cp target/classes me.monstermaze.engine.play.PlayFrame --kit JUMPER --monsters 40
+java -cp target/classes me.monstermaze.engine.play.PlayFrame --kit JUMPER --mode ORIGINAL
+java -cp target/classes me.monstermaze.engine.cli.AiMain 6000 JUMPER ORIGINAL ai-out
 ```
 
-## Next ideas
+## Controls
 
-- Camera follow / zoom on player
-- Sound/juice
-- AI agent loop using the same Action API
-- Live-plugin CSV exporter for TraceComparer
+WASD move · arrows turn · Space jump · Shift sprint · Q primary · E enhanced  
+`+`/`-` zoom · `0` reset zoom · `F` AI · `M` mute
