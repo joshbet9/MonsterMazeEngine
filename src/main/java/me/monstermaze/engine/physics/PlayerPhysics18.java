@@ -35,7 +35,17 @@ public final class PlayerPhysics18 {
 
         if (action.jump && groundedAtStart && p.jumpTicks == 0) {
             if (!JumpMechanics.isJumpEnabled(jumpAmplifier)) {
-                p.vel = new Vec3(p.vel.x, 0.0, p.vel.z);
+                // Monster Maze's Jump Boost -10 suppresses only the vertical
+                // jump. The vanilla sprint-jump horizontal impulse remains,
+                // which is the source of the 1.8 "speeding" technique.
+                double vx = p.vel.x;
+                double vz = p.vel.z;
+                if (action.sprint) {
+                    double yaw = Math.toRadians(p.yaw);
+                    vx -= Math.sin(yaw) * SPRINT_JUMP_IMPULSE;
+                    vz += Math.cos(yaw) * SPRINT_JUMP_IMPULSE;
+                }
+                p.vel = new Vec3(vx, 0.0, vz);
                 p.jumpTicks = 0;
             } else {
                 double vy = JumpMechanics.vanillaJumpVelocity(jumpAmplifier);
