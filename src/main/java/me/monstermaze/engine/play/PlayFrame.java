@@ -11,6 +11,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseMotionAdapter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
@@ -60,6 +63,7 @@ public final class PlayFrame extends JFrame {
         this.mainMenu = mainMenu;
         this.theme = UiTheme.of(this.config.darkMode);
         this.zoom = this.config.zoom;
+        this.cameraDistance = 9.0 / Math.max(0.8, Math.min(6.0, this.zoom));
         this.viewSize = this.config.windowSize;
         this.showHelp = this.config.showControlsHint;
         Sfx.setEnabled(this.config.sfxEnabled);
@@ -191,9 +195,16 @@ public final class PlayFrame extends JFrame {
                     panel.repaint();
                     return;
                 }
-                if (code == KeyEvent.VK_EQUALS || code == KeyEvent.VK_ADD) zoom = Math.min(6.0, zoom + 0.25);
-                else if (code == KeyEvent.VK_MINUS || code == KeyEvent.VK_SUBTRACT) zoom = Math.max(0.8, zoom - 0.25);
-                else if (code == KeyEvent.VK_0) zoom = PlayFrame.this.config.zoom;
+                if (code == KeyEvent.VK_EQUALS || code == KeyEvent.VK_ADD) {
+                    zoom = Math.min(6.0, zoom + 0.25);
+                    cameraDistance = 9.0 / zoom;
+                } else if (code == KeyEvent.VK_MINUS || code == KeyEvent.VK_SUBTRACT) {
+                    zoom = Math.max(0.8, zoom - 0.25);
+                    cameraDistance = 9.0 / zoom;
+                } else if (code == KeyEvent.VK_0) {
+                    zoom = PlayFrame.this.config.zoom;
+                    cameraDistance = 9.0 / Math.max(0.8, Math.min(6.0, zoom));
+                } else
                 else if (code == KeyEvent.VK_M) { sfxOn = !sfxOn; Sfx.setEnabled(sfxOn); }
                 keys.add(code);
             }
