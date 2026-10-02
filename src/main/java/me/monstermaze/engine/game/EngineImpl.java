@@ -325,7 +325,7 @@ public final class EngineImpl implements MonsterMazeEngine {
         List<int[]> cells = new ArrayList<>();
         for (int r = 0; r < Layouts.SIZE; r++) {
             for (int c = 0; c < Layouts.SIZE; c++) {
-                if (Layouts.isRawPath(graph.raw(r, c))) cells.add(new int[]{r, c});
+                if (graph.isTraversable(r, c)) cells.add(new int[]{r, c});
             }
         }
         return cells;
