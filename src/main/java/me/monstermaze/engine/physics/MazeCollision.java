@@ -27,6 +27,10 @@ public final class MazeCollision {
         this.centerZ = centerZ;
     }
 
+    public double floorY() {
+        return centerY;
+    }
+
     public void move(PlayerState p, double dx, double dy, double dz) {
         Aabb original = playerBox(p);
         List<Aabb> boxes = colliders(original.expand(Math.abs(dx), Math.abs(dy), Math.abs(dz)));
