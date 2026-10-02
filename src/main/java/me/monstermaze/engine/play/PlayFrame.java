@@ -193,105 +193,31 @@ public final class PlayFrame extends JFrame {
      * A JFrame is not normally the focused component after the game panel is
      * clicked, so the old listener could silently stop receiving W/A/S/D.
      */
+    /**
+     * Track physical keyboard state at the AWT level. Unlike Swing key bindings,
+     * this receives both press and release events for modifier keys such as Shift
+     * regardless of which child component currently owns focus.
+     */
     private void installKeyBindings() {
-        InputMap input = panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap actions = panel.getActionMap();
+        final java.awt.KeyEventDispatcher dispatcher = event -> {
+            if (event.getWindow() != PlayFrame.this) return false;
 
-        bindHeld(input, actions, KeyEvent.VK_W);
-        bindHeld(input, actions, KeyEvent.VK_A);
-        bindHeld(input, actions, KeyEvent.VK_S);
-        bindHeld(input, actions, KeyEvent.VK_D);
-        bindHeld(input, actions, KeyEvent.VK_UP);
-        bindHeld(input, actions, KeyEvent.VK_DOWN);
-        bindHeld(input, actions, KeyEvent.VK_LEFT);
-        bindHeld(input, actions, KeyEvent.VK_RIGHT);
-        bindHeld(input, actions, KeyEvent.VK_SPACE);
-        bindHeld(input, actions, KeyEvent.VK_SHIFT);
-
-        bindOnce(input, actions, KeyEvent.VK_ESCAPE, () -> {
-            if (paused || state.phase == GamePhase.ENDING) {
-                running = false;
-                dispose();
-            } else {
-                paused = true;
-                panel.repaint();
+            int code = event.getKeyCode();
+            if (event.getID() == KeyEvent.KEY_PRESSED) {
+                keys.add(code);
+            } else if (event.getID() == KeyEvent.KEY_RELEASED) {
+                keys.remove(code);
             }
-        });
+            return false;
+        };
+        java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                .addKeyEventDispatcher(dispatcher);
 
-        bindOnce(input, actions, KeyEvent.VK_P, () -> {
-            paused = !paused;
-            panel.repaint();
-        });
-        bindOnce(input, actions, KeyEvent.VK_H, () -> {
-            showHelp = !showHelp;
-            panel.repaint();
-        });
-        bindOnce(input, actions, KeyEvent.VK_F, () -> {
-            firstPerson = !firstPerson;
-            cameraYaw = state.player.yaw;
-            cameraPitch = firstPerson ? -4.0f : -18.0f;
-            panel.repaint();
-        });
-
-        bindHeld(input, actions, KeyEvent.VK_Q);
-        bindHeld(input, actions, KeyEvent.VK_E);
-
-        bindOnce(input, actions, KeyEvent.VK_OPEN_BRACKET,
-                () -> cameraDistance = Math.max(4.0, cameraDistance - 1.0));
-        bindOnce(input, actions, KeyEvent.VK_CLOSE_BRACKET,
-                () -> cameraDistance = Math.min(18.0, cameraDistance + 1.0));
-
-        bindOnce(input, actions, KeyEvent.VK_EQUALS, () -> {
-            zoom = Math.min(6.0, zoom + 0.25);
-            cameraDistance = 9.0 / zoom;
-        });
-        bindOnce(input, actions, KeyEvent.VK_ADD, () -> {
-            zoom = Math.min(6.0, zoom + 0.25);
-            cameraDistance = 9.0 / zoom;
-        });
-        bindOnce(input, actions, KeyEvent.VK_MINUS, () -> {
-            zoom = Math.max(0.8, zoom - 0.25);
-            cameraDistance = 9.0 / zoom;
-        });
-        bindOnce(input, actions, KeyEvent.VK_SUBTRACT, () -> {
-            zoom = Math.max(0.8, zoom - 0.25);
-            cameraDistance = 9.0 / zoom;
-        });
-        bindOnce(input, actions, KeyEvent.VK_0, () -> {
-            zoom = PlayFrame.this.config.zoom;
-            cameraDistance = 9.0 / Math.max(0.8, Math.min(6.0, zoom));
-        });
-        bindOnce(input, actions, KeyEvent.VK_M, () -> Sfx.setEnabled(!config.sfxEnabled));
-    }
-
-    private void bindHeld(InputMap input, ActionMap actions, int keyCode) {
-        String base = "held-" + keyCode;
-        input.put(KeyStroke.getKeyStroke(keyCode, 0, false), base + "-down");
-        input.put(KeyStroke.getKeyStroke(keyCode, 0, true), base + "-up");
-        actions.put(base + "-down", new javax.swing.AbstractAction() {
-            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
-                keys.add(keyCode);
-            }
-        });
-        actions.put(base + "-up", new javax.swing.AbstractAction() {
-            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
-                keys.remove(keyCode);
-            }
-        });
-    }
-
-    private void bindOnce(InputMap input, ActionMap actions, int keyCode, Runnable command) {
-        String base = "once-" + keyCode;
-        input.put(KeyStroke.getKeyStroke(keyCode, 0, false), base + "-down");
-        input.put(KeyStroke.getKeyStroke(keyCode, 0, true), base + "-up");
-        actions.put(base + "-down", new javax.swing.AbstractAction() {
-            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
-                if (keys.add(keyCode)) command.run();
-            }
-        });
-        actions.put(base + "-up", new javax.swing.AbstractAction() {
-            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
-                keys.remove(keyCode);
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowClosed(WindowEvent e) {
+                java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                        .removeKeyEventDispatcher(dispatcher);
+                keys.clear();
             }
         });
     }
