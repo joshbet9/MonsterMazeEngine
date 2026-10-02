@@ -265,7 +265,9 @@ public final class PlayFrame extends JFrame {
         if (keys.contains(KeyEvent.VK_A)) strafe -= 1.0;
         if (keys.contains(KeyEvent.VK_D)) strafe += 1.0;
 
-        boolean jump = keys.contains(KeyEvent.VK_SPACE);
+        boolean jump = keys.contains(KeyEvent.VK_SPACE)
+                && state.player.kit == KitType.JUMPER
+                && state.player.jumpCharges > 0;
         boolean abilityKeyDown = keys.contains(KeyEvent.VK_Q) || keys.contains(KeyEvent.VK_E);
         boolean ability = abilityKeyDown && !abilityHeld;
         abilityHeld = abilityKeyDown;
