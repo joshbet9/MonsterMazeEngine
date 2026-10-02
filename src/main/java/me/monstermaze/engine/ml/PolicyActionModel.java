@@ -89,7 +89,7 @@ public final class PolicyActionModel {
     }
 
     private static double scalar(String json,String key){
-        Matcher m=Pattern.compile("""+Pattern.quote(key)+""\\s*:\\s*([-+0-9.eE]+)").matcher(json);
+        Matcher m=Pattern.compile("\"" + Pattern.quote(key) + "\"\\\\s*:\\s*([-+0-9.eE]+)").matcher(json);
         if(!m.find()) throw new IllegalArgumentException("Missing scalar: "+key);
         return Double.parseDouble(m.group(1));
     }
@@ -119,7 +119,7 @@ public final class PolicyActionModel {
         return out;
     }
     private static String bracketBody(String json,String key){
-        int marker=json.indexOf("""+key+""");
+        int marker=json.indexOf("\"" + key + "\"");
         if(marker<0) throw new IllegalArgumentException("Missing field: "+key);
         int start=json.indexOf('[',marker);
         if(start<0) throw new IllegalArgumentException("Missing array: "+key);
