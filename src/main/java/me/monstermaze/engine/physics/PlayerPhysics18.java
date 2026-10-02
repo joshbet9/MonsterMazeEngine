@@ -75,12 +75,27 @@ public final class PlayerPhysics18 {
         double dx = p.vel.x;
         double dy = p.vel.y;
         double dz = p.vel.z;
-        collision.move(p, dx, dy, dz);
 
-        if (!p.onGround && p.pos.y <= collision.floorY()) {
+        if (p.pos.y < collision.floorY()
+                && p.pos.y > collision.floorY() - 0.5
+                && p.vel.y <= 0.0
+                && collision.hasPhysicalFloor(p.pos.x, p.pos.z)) {
             p.pos = new Vec3(p.pos.x, collision.floorY(), p.pos.z);
             p.vel = new Vec3(p.vel.x, 0.0, p.vel.z);
             p.onGround = true;
+        }
+
+        collision.move(p, dx, dy, dz);
+
+        boolean supported = collision.hasPhysicalFloor(p.pos.x, p.pos.z);
+        boolean landed = supported && p.pos.y <= collision.floorY() + 1.0E-9
+                && p.vel.y <= 0.0;
+        if (landed) {
+            p.pos = new Vec3(p.pos.x, collision.floorY(), p.pos.z);
+            p.vel = new Vec3(p.vel.x, 0.0, p.vel.z);
+            p.onGround = true;
+        } else {
+            p.onGround = false;
         }
 
         if (!p.onGround) {
