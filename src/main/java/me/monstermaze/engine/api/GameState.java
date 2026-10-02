@@ -1,52 +1,80 @@
 package me.monstermaze.engine.api;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Full immutable snapshot of a Monster Maze game at a single tick.
+ * Mutable simulation snapshot whose fields correspond to the state exposed by
+ * MonsterMazeAI. The local UI may retain references between ticks; callers
+ * should treat a returned TickResult as the authoritative next snapshot.
  */
 public final class GameState {
-    public final long tick;
-    public final MazeMode mode;
-    public final GamePhase phase;
-    public final int stage;
-    public final int phaseTimerTicks;
-    public final int phaseTimerMax;
-    /** 0 = not started, up to 11 = fully deteriorated. */
-    public final int centerDeteriorationStep;
-    public final MazeState maze;
-    public final PlayerState player;
-    public final List<MonsterState> monsters;
-    public final SafePadState activePad;   // nullable
-    public final SafePadState previewPad;  // nullable
+    public long tick;
+    public MazeMode mode;
+    public GamePhase phase;
+    public int stage = 1;
+    public int phaseTimerTicks;
+    public int phaseTimerMax;
+    public int phaseSecondAccumulatorTicks;
+    public int liveSeconds;
+    public int centerDeteriorationStep = 11;
+    public boolean previewPadRequested;
+    public int pendingMonsterSpawns;
 
-    public GameState(
-            long tick,
-            MazeMode mode,
-            GamePhase phase,
-            int stage,
-            int phaseTimerTicks,
-            int phaseTimerMax,
-            int centerDeteriorationStep,
-            MazeState maze,
-            PlayerState player,
-            List<MonsterState> monsters,
-            SafePadState activePad,
-            SafePadState previewPad) {
-        this.tick = tick;
-        this.mode = mode;
-        this.phase = phase;
-        this.stage = stage;
-        this.phaseTimerTicks = phaseTimerTicks;
-        this.phaseTimerMax = phaseTimerMax;
-        this.centerDeteriorationStep = centerDeteriorationStep;
-        this.maze = maze;
-        this.player = player;
-        this.monsters = monsters == null
-                ? Collections.emptyList()
-                : Collections.unmodifiableList(monsters);
-        this.activePad = activePad;
-        this.previewPad = previewPad;
+    public MazeState maze;
+    public PlayerState player;
+    public final List<MonsterState> monsters = new ArrayList<>();
+    public final List<SafePadState> oldPads = new ArrayList<>();
+    public final java.util.Map<String, Integer> oldPadDecaySeconds = new java.util.HashMap<>();
+
+    public SafePadState activePad;
+    public SafePadState previewPad;
+
+    public boolean alive = true;
+    public boolean completed;
+    public boolean inMonsterMaze = true;
+    public boolean padReached;
+
+    public GameState copy() {
+        GameState s = new GameState();
+        s.tick = tick;
+        s.mode = mode;
+        s.phase = phase;
+        s.stage = stage;
+        s.phaseTimerTicks = phaseTimerTicks;
+        s.phaseTimerMax = phaseTimerMax;
+        s.phaseSecondAccumulatorTicks = phaseSecondAccumulatorTicks;
+        s.liveSeconds = liveSeconds;
+        s.centerDeteriorationStep = centerDeteriorationStep;
+        s.previewPadRequested = previewPadRequested;
+        s.pendingMonsterSpawns = pendingMonsterSpawns;
+        s.maze = copyMaze(maze);
+        s.player = player == null ? null : player.copy();
+        for (MonsterState m : monsters) s.monsters.add(m.copy());
+        s.oldPads.addAll(oldPads);
+        s.oldPadDecaySeconds.putAll(oldPadDecaySeconds);
+        s.activePad = activePad;
+        s.previewPad = previewPad;
+        s.alive = alive;
+        s.completed = completed;
+        s.inMonsterMaze = inMonsterMaze;
+        s.padReached = padReached;
+        return s;
+    }
+
+    private static MazeState copyMaze(MazeState source) {
+        if (source == null) return null;
+        int n = source.raw.length;
+        int[][] raw = new int[n][];
+        boolean[][] traversable = new boolean[n][];
+        boolean[][] floor = new boolean[n][];
+        boolean[][] pad = new boolean[n][];
+        for (int i = 0; i < n; i++) {
+            raw[i] = source.raw[i].clone();
+            traversable[i] = source.traversable[i].clone();
+            floor[i] = source.physicalFloor[i].clone();
+            pad[i] = source.padSurface[i].clone();
+        }
+        return new MazeState(source.layoutId, raw, traversable, floor, pad);
     }
 }
