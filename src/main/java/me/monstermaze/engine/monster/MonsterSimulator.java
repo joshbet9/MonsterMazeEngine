@@ -85,9 +85,8 @@ public final class MonsterSimulator {
             if (dist < 1e-9) continue;
 
             float desiredYaw = (float) (Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0F;
-            float yaw = approachAngle(m.direction < 0 ? 0.0F : yawFromDirection(m.direction),
-                    desiredYaw, 30.0F);
-            m.direction = directionFromWorldYaw(yaw);
+            float currentYaw = m.direction < 0 ? desiredYaw : yawFromDirection(m.direction);
+            float yaw = approachAngle(currentYaw, desiredYaw, 30.0F);
 
             double movementInput = speed * SNOWMAN_MOVEMENT_SPEED;
             double rad = Math.toRadians(yaw);
@@ -110,7 +109,9 @@ public final class MonsterSimulator {
 
     private int[] chooseNextWaypoint(MonsterState m, int row, int col) {
         List<int[]> choices = new ArrayList<>(maze.traversableCardinals(row, col));
-        int currentDirection = directionFromDelta(m.targetWaypointX - row, m.targetWaypointZ - col);
+        int currentDirection = m.direction >= 0
+                ? m.direction
+                : directionFromDelta(m.targetWaypointX - row, m.targetWaypointZ - col);
         if (choices.size() > 1 && currentDirection >= 0) {
             choices.removeIf(n -> directionFromDelta(n[0] - row, n[1] - col) == opposite(currentDirection));
         }
@@ -146,6 +147,7 @@ public final class MonsterSimulator {
 
         m.targetWaypointX = tr;
         m.targetWaypointZ = tc;
+        m.direction = dir;
         return new int[]{tr, tc};
     }
 
@@ -156,7 +158,13 @@ public final class MonsterSimulator {
         if (m.pos.y <= centerY) {
             m.pos = new Vec3(m.pos.x, centerY, m.pos.z);
             m.vel = Vec3.ZERO;
-            if (tick - m.launchedAtTick >= 10) m.removed = true;
+            if (tick - m.launchedAtTick >= 10) {
+                m.removed = true;
+            } else {
+                m.launched = false;
+                m.launchedUntilTick = 0L;
+                m.launchedAtTick = 0L;
+            }
         } else if (tick - m.launchedAtTick >= 30) {
             m.removed = true;
         }
