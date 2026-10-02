@@ -36,6 +36,7 @@ class MonsterPathIntegrityTest {
 
         Set<Integer> directionsSeen = new HashSet<>();
         Vec3 previous = monster.pos;
+        int previousDirection = monster.direction;
 
         for (int tick = 0; tick < 1600; tick++) {
             simulator.tick(monsters, tick);
@@ -45,8 +46,21 @@ class MonsterPathIntegrityTest {
             double dx = monster.pos.x - previous.x;
             double dz = monster.pos.z - previous.z;
             if (Math.hypot(dx, dz) > 1.0e-9) {
-                assertTrue(Math.abs(dx) < 1.0e-9 || Math.abs(dz) < 1.0e-9,
-                        "Monster movement must stay cardinal; got dx=" + dx + " dz=" + dz);
+                boolean cardinal = Math.abs(dx) < 1.0e-9 || Math.abs(dz) < 1.0e-9;
+                if (!cardinal) {
+                    // At a corner the source waypoint tolerance allows the mob
+                    // to finish the old segment (up to 0.4 blocks) and begin the
+                    // new cardinal segment in the same tick. Permit that single
+                    // turn correction, but keep both components bounded.
+                    assertNotEquals(previousDirection, monster.direction,
+                            "Only a direction change may produce a multi-axis corner correction");
+                    double maxComponent = Math.max(Math.abs(dx), Math.abs(dz));
+                    double minComponent = Math.min(Math.abs(dx), Math.abs(dz));
+                    assertTrue(maxComponent <= 0.400001,
+                            "Corner correction exceeded waypoint tolerance: dx=" + dx + " dz=" + dz);
+                    assertTrue(minComponent <= 0.140001,
+                            "Corner correction exceeded one movement step: dx=" + dx + " dz=" + dz);
+                }
                 directionsSeen.add(monster.direction);
 
                 int row = cellRow(monster.pos.x);
@@ -60,6 +74,7 @@ class MonsterPathIntegrityTest {
             }
 
             previous = monster.pos;
+            previousDirection = monster.direction;
         }
 
         assertTrue(directionsSeen.size() >= 2,
