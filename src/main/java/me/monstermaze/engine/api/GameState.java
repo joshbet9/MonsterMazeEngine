@@ -10,6 +10,9 @@ import java.util.List;
  */
 public final class GameState {
     public long tick;
+    public final int centerX;
+    public final int centerY;
+    public final int centerZ;
     public MazeMode mode;
     public GamePhase phase;
     public int stage = 1;
@@ -36,7 +39,7 @@ public final class GameState {
     public boolean padReached;
 
     public GameState copy() {
-        GameState s = new GameState();
+        GameState s = new GameState(centerX, centerY, centerZ);
         s.tick = tick;
         s.mode = mode;
         s.phase = phase;
@@ -60,6 +63,16 @@ public final class GameState {
         s.inMonsterMaze = inMonsterMaze;
         s.padReached = padReached;
         return s;
+    }
+
+    public GameState() {
+        this(0, 64, 0);
+    }
+
+    public GameState(int centerX, int centerY, int centerZ) {
+        this.centerX = centerX;
+        this.centerY = centerY;
+        this.centerZ = centerZ;
     }
 
     private static MazeState copyMaze(MazeState source) {
