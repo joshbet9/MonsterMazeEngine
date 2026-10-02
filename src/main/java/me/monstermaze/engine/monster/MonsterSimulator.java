@@ -60,7 +60,8 @@ public final class MonsterSimulator {
             if (m.pos.y < centerY) {
                 int row = nearestRow(m.pos.x);
                 int col = nearestColumn(m.pos.z);
-                if (Coordinates.inBounds(row, col) && maze.isRawPath(row, col)) {
+                if (Coordinates.inBounds(row, col) && maze.isRawPath(row, col)
+                        && !maze.hasPadSurface(row, col)) {
                     m.pos = new Vec3(Coordinates.pathCenterX(centerX, row), centerY,
                             Coordinates.pathCenterZ(centerZ, col));
                     m.vel = Vec3.ZERO;
@@ -118,10 +119,13 @@ public final class MonsterSimulator {
 
             int nextRow = nearestRow(nx);
             int nextCol = nearestColumn(nz);
-            // Do not let the mob's continuous movement cross into a disabled
-            // waypoint/pad cell merely because its current target is beyond it.
-            if (!Coordinates.inBounds(nextRow, nextCol)
-                    || !maze.isTraversable(nextRow, nextCol)) {
+
+            // Keep the Safe Pad as a hard monster exclusion zone without using
+            // the dynamic waypoint overlay as a collision wall. Source mobs can
+            // turn diagonally through a corridor corner; blocking every
+            // non-traversable destination cell caused some mobs to deadlock.
+            if (Coordinates.inBounds(nextRow, nextCol)
+                    && maze.hasPadSurface(nextRow, nextCol)) {
                 m.targetWaypointX = -1;
                 m.targetWaypointZ = -1;
                 m.direction = -1;
