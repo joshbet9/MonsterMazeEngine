@@ -34,7 +34,11 @@ public final class PlayerPhysics18 {
         float friction = groundedAtStart ? SLIPPERINESS * GROUND_FRICTION : GROUND_FRICTION;
 
         if (action.jump && groundedAtStart && p.jumpTicks == 0) {
-            double vy = JumpMechanics.vanillaJumpVelocity(jumpAmplifier);
+            if (!JumpMechanics.isJumpEnabled(jumpAmplifier)) {
+                p.vel = new Vec3(p.vel.x, 0.0, p.vel.z);
+                p.jumpTicks = 0;
+            } else {
+                double vy = JumpMechanics.vanillaJumpVelocity(jumpAmplifier);
             double vx = p.vel.x;
             double vz = p.vel.z;
             if (action.sprint) {
@@ -43,13 +47,8 @@ public final class PlayerPhysics18 {
                 vz += Math.cos(yaw) * SPRINT_JUMP_IMPULSE;
             }
             p.vel = new Vec3(vx, vy, vz);
-            if (vy > 0.0D) {
                 p.onGround = false;
                 p.jumpTicks = 10;
-            } else {
-                // Jump Boost -10 produces a negative vanilla jump velocity,
-                // which leaves the player grounded after collision resolution.
-                p.jumpTicks = 0;
             }
         } else if (!action.jump) {
             p.jumpTicks = 0;
