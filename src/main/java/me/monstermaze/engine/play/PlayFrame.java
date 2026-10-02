@@ -268,7 +268,7 @@ public final class PlayFrame extends JFrame {
         me.monstermaze.engine.api.Action action = new me.monstermaze.engine.api.Action(
                 forward, strafe,
                 jump,
-                keys.contains(KeyEvent.VK_SHIFT),
+                keys.contains(KeyEvent.VK_W) || keys.contains(KeyEvent.VK_UP) || keys.contains(KeyEvent.VK_SHIFT),
                 yawDelta,
                 ability
         );
