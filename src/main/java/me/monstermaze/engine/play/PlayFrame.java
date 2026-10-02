@@ -195,7 +195,7 @@ public final class PlayFrame extends JFrame {
 
         boolean jump = keys.contains(KeyEvent.VK_SPACE);
         boolean ability = keys.contains(KeyEvent.VK_Q) || keys.contains(KeyEvent.VK_E);
-        Action action = new Action(
+        me.monstermaze.engine.api.Action action = new me.monstermaze.engine.api.Action(
                 forward, strafe,
                 jump,
                 keys.contains(KeyEvent.VK_SHIFT),
