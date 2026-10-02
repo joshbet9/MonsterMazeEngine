@@ -2,23 +2,18 @@
 
 ## Done
 
-- Full 1.8 engine (maze, physics, kits, pads, monsters, timer, center det)
-- **Playable game** with camera follow + zoom
-- **HeuristicAgent** on the shared Action API (`F` in-game, or `--ai` / menu checkbox)
-- **Procedural SFX** (hit, pad, ability, stage, death) — mute with `M`
-- **Mode-default mobs**: ORIGINAL/SPEED = 150, MODERN = 225 (override optional)
-- Clearer path checkerboard, pad borders + beacon, player facing line
+- Full 1.8 engine + kits + center deterioration
+- Playable game (camera, zoom, SFX, mode-default mobs)
+- **Safe Pad placement** closer to plugin: avoid prior pads by 40 blocks, disable +/-2 waypoint cells, clear mobs on new pad
+- **BFS Pathfinder** + AI walks maze graph toward pad
+- **Minimap** (top-right): paths, pad, player
+- **End-of-run dialog**: peak stage, time, mob count
 
 ## Run
 
 ```bash
 mvn -q package
 java -cp target/classes me.monstermaze.engine.play.PlayMenu
-java -cp target/classes me.monstermaze.engine.play.PlayFrame --kit JUMPER --mode ORIGINAL
-java -cp target/classes me.monstermaze.engine.cli.AiMain 6000 JUMPER ORIGINAL ai-out
+java -cp target/classes me.monstermaze.engine.play.PlayFrame --ai --kit JUMPER
+java -cp target/classes me.monstermaze.engine.cli.AiMain 8000 JUMPER ORIGINAL
 ```
-
-## Controls
-
-WASD move · arrows turn · Space jump · Shift sprint · Q primary · E enhanced  
-`+`/`-` zoom · `0` reset zoom · `F` AI · `M` mute
