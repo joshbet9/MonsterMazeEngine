@@ -1,19 +1,26 @@
 # Progress
 
+## Architecture
+
+**MonsterMazeEngine** is the single pure simulation core:
+
+- Minecraft plugin (later adapter) and this local game both share the same mechanics
+- **AI is not a separate game mode** — training (MonsterMazeAI) will call `MonsterMazeEngine.tick(state, action)` with its own policies
+- The play UI is **human-only** (WASD, kits, pads, stages)
+
+Optional `HeuristicAgent` / `AiMain` remain as headless smoke tools for the Action API only.
+
 ## Done
 
-- Full 1.8 engine + kits + center deterioration
-- Playable game (camera, zoom, SFX, mode-default mobs)
-- **Safe Pad placement** closer to plugin: avoid prior pads by 40 blocks, disable +/-2 waypoint cells, clear mobs on new pad
-- **BFS Pathfinder** + AI walks maze graph toward pad
-- **Minimap** (top-right): paths, pad, player
-- **End-of-run dialog**: peak stage, time, mob count
+- 1.8-faithful engine (maze, physics, kits, pads, monsters, timer, center det)
+- Playable local game (camera, zoom, minimap, SFX, mode-default mobs)
+- Safe Pad placement (avoid 40 blocks, disable pad waypoints)
+- Pathfinder utility (usable by external AI)
+- Trace CSV harness for pure-vs-live diffs
 
-## Run
+## Run (player)
 
 ```bash
 mvn -q package
 java -cp target/classes me.monstermaze.engine.play.PlayMenu
-java -cp target/classes me.monstermaze.engine.play.PlayFrame --ai --kit JUMPER
-java -cp target/classes me.monstermaze.engine.cli.AiMain 8000 JUMPER ORIGINAL
 ```
