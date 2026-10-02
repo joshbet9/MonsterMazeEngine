@@ -9,7 +9,6 @@ import me.monstermaze.engine.render.PerspectiveRenderer;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -152,63 +151,15 @@ public final class PlayFrame extends JFrame {
             panel.repaint();
         });
 
-        addKeyListener(new KeyAdapter() {
-            private boolean sfxOn = PlayFrame.this.config.sfxEnabled;
-            @Override public void keyPressed(KeyEvent e) {
-                int code = e.getKeyCode();
-                if (code == KeyEvent.VK_ESCAPE) {
-                    if (paused || state.phase == GamePhase.ENDING) {
-                        running = false;
-                        dispose();
-                    } else {
-                        paused = true;
-                        panel.repaint();
-                    }
-                    return;
-                }
-                if (code == KeyEvent.VK_P) {
-                    paused = !paused;
-                    panel.repaint();
-                    return;
-                }
-                if (code == KeyEvent.VK_H) {
-                    showHelp = !showHelp;
-                    panel.repaint();
-                    return;
-                }
-                if (code == KeyEvent.VK_F) {
-                    firstPerson = !firstPerson;
-                    cameraYaw = state.player.yaw;
-                    cameraPitch = firstPerson ? -4.0f : -18.0f;
-                    panel.repaint();
-                    return;
-                }
-                if (code == KeyEvent.VK_OPEN_BRACKET) {
-                    cameraDistance = Math.max(4.0, cameraDistance - 1.0);
-                    panel.repaint();
-                    return;
-                }
-                if (code == KeyEvent.VK_CLOSE_BRACKET) {
-                    cameraDistance = Math.min(18.0, cameraDistance + 1.0);
-                    panel.repaint();
-                    return;
-                }
-                if (code == KeyEvent.VK_EQUALS || code == KeyEvent.VK_ADD) {
-                    zoom = Math.min(6.0, zoom + 0.25);
-                    cameraDistance = 9.0 / zoom;
-                } else if (code == KeyEvent.VK_MINUS || code == KeyEvent.VK_SUBTRACT) {
-                    zoom = Math.max(0.8, zoom - 0.25);
-                    cameraDistance = 9.0 / zoom;
-                } else if (code == KeyEvent.VK_0) {
-                    zoom = PlayFrame.this.config.zoom;
-                    cameraDistance = 9.0 / Math.max(0.8, Math.min(6.0, zoom));
-                } else if (code == KeyEvent.VK_M) { sfxOn = !sfxOn; Sfx.setEnabled(sfxOn); }
-                keys.add(code);
-            }
-            @Override public void keyReleased(KeyEvent e) { keys.remove(e.getKeyCode()); }
-        });
+        installKeyBindings();
+        panel.setFocusable(true);
+        panel.setFocusTraversalKeysEnabled(false);
         setFocusable(true);
-        requestFocusInWindow();
+        SwingUtilities.invokeLater(() -> {
+            toFront();
+            requestFocus();
+            panel.requestFocusInWindow();
+        });
     }
 
     public void startLoop() {
@@ -230,6 +181,114 @@ public final class PlayFrame extends JFrame {
         }, "mm-tick");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * Use Swing's window-scoped key bindings rather than a JFrame KeyListener.
+     * A JFrame is not normally the focused component after the game panel is
+     * clicked, so the old listener could silently stop receiving W/A/S/D.
+     */
+    private void installKeyBindings() {
+        InputMap input = panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actions = panel.getActionMap();
+
+        bindHeld(input, actions, KeyEvent.VK_W);
+        bindHeld(input, actions, KeyEvent.VK_A);
+        bindHeld(input, actions, KeyEvent.VK_S);
+        bindHeld(input, actions, KeyEvent.VK_D);
+        bindHeld(input, actions, KeyEvent.VK_UP);
+        bindHeld(input, actions, KeyEvent.VK_DOWN);
+        bindHeld(input, actions, KeyEvent.VK_LEFT);
+        bindHeld(input, actions, KeyEvent.VK_RIGHT);
+        bindHeld(input, actions, KeyEvent.VK_SPACE);
+        bindHeld(input, actions, KeyEvent.VK_SHIFT);
+
+        bindOnce(input, actions, KeyEvent.VK_ESCAPE, () -> {
+            if (paused || state.phase == GamePhase.ENDING) {
+                running = false;
+                dispose();
+            } else {
+                paused = true;
+                panel.repaint();
+            }
+        });
+
+        bindOnce(input, actions, KeyEvent.VK_P, () -> {
+            paused = !paused;
+            panel.repaint();
+        });
+        bindOnce(input, actions, KeyEvent.VK_H, () -> {
+            showHelp = !showHelp;
+            panel.repaint();
+        });
+        bindOnce(input, actions, KeyEvent.VK_F, () -> {
+            firstPerson = !firstPerson;
+            cameraYaw = state.player.yaw;
+            cameraPitch = firstPerson ? -4.0f : -18.0f;
+            panel.repaint();
+        });
+
+        bindHeld(input, actions, KeyEvent.VK_Q);
+        bindHeld(input, actions, KeyEvent.VK_E);
+
+        bindOnce(input, actions, KeyEvent.VK_OPEN_BRACKET,
+                () -> cameraDistance = Math.max(4.0, cameraDistance - 1.0));
+        bindOnce(input, actions, KeyEvent.VK_CLOSE_BRACKET,
+                () -> cameraDistance = Math.min(18.0, cameraDistance + 1.0));
+
+        bindOnce(input, actions, KeyEvent.VK_EQUALS, () -> {
+            zoom = Math.min(6.0, zoom + 0.25);
+            cameraDistance = 9.0 / zoom;
+        });
+        bindOnce(input, actions, KeyEvent.VK_ADD, () -> {
+            zoom = Math.min(6.0, zoom + 0.25);
+            cameraDistance = 9.0 / zoom;
+        });
+        bindOnce(input, actions, KeyEvent.VK_MINUS, () -> {
+            zoom = Math.max(0.8, zoom - 0.25);
+            cameraDistance = 9.0 / zoom;
+        });
+        bindOnce(input, actions, KeyEvent.VK_SUBTRACT, () -> {
+            zoom = Math.max(0.8, zoom - 0.25);
+            cameraDistance = 9.0 / zoom;
+        });
+        bindOnce(input, actions, KeyEvent.VK_0, () -> {
+            zoom = PlayFrame.this.config.zoom;
+            cameraDistance = 9.0 / Math.max(0.8, Math.min(6.0, zoom));
+        });
+        bindOnce(input, actions, KeyEvent.VK_M, () -> Sfx.setEnabled(!config.sfxEnabled));
+    }
+
+    private void bindHeld(InputMap input, ActionMap actions, int keyCode) {
+        String base = "held-" + keyCode;
+        input.put(KeyStroke.getKeyStroke(keyCode, 0, false), base + "-down");
+        input.put(KeyStroke.getKeyStroke(keyCode, 0, true), base + "-up");
+        actions.put(base + "-down", new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                keys.add(keyCode);
+            }
+        });
+        actions.put(base + "-up", new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                keys.remove(keyCode);
+            }
+        });
+    }
+
+    private void bindOnce(InputMap input, ActionMap actions, int keyCode, Runnable command) {
+        String base = "once-" + keyCode;
+        input.put(KeyStroke.getKeyStroke(keyCode, 0, false), base + "-down");
+        input.put(KeyStroke.getKeyStroke(keyCode, 0, true), base + "-up");
+        actions.put(base + "-down", new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (keys.add(keyCode)) command.run();
+            }
+        });
+        actions.put(base + "-up", new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                keys.remove(keyCode);
+            }
+        });
     }
 
     private void tickOnce() {
