@@ -1,140 +1,110 @@
 package me.monstermaze.engine.physics;
 
 import me.monstermaze.engine.api.Action;
-import me.monstermaze.engine.api.KitType;
 import me.monstermaze.engine.api.PlayerState;
 import me.monstermaze.engine.api.Vec3;
 import me.monstermaze.engine.maze.Coordinates;
-import me.monstermaze.engine.maze.Layouts;
 import me.monstermaze.engine.maze.MazeGraph;
 
 /**
- * Simplified but tick-faithful 1.8-style player movement for the pure engine.
- *
- * <p>Models sprint walk, jump impulse, gravity, Jumper charge consumption (750ms gate),
- * and legacy speeding (rapid jump while sprinting ~1.5x). Speeding numbers are approximate.
+ * Monster Maze's 1.8 movement model, aligned with MonsterMazeAI's
+ * LegacyMovementModel. The engine treats the Minecraft client as an external
+ * executor of the same semantic Action.
  */
 public final class PlayerPhysics18 {
+    private static final float SLIPPERINESS = 0.6F;
+    private static final float GROUND_FRICTION = 0.91F;
+    private static final float WALK_SPEED = 0.10F;
+    private static final float SPRINT_MULTIPLIER = 1.30F;
+    private static final float AIR_MOVE_FACTOR = 0.02F;
+    private static final double GRAVITY = 0.08D;
+    private static final double AIR_DRAG = 0.9800000190734863D;
+    private static final double JUMP_VELOCITY = 0.42D;
+    private static final double SPRINT_JUMP_IMPULSE = 0.2D;
 
-    public static final double WALK_SPEED = 0.22;
-    public static final double SPRINT_SPEED = 0.28;
-    public static final double JUMP_VELOCITY = 0.42;
-    public static final double GRAVITY = 0.08;
-    public static final double DRAG_AIR = 0.91;
-    public static final double SPEEDING_MULT = 1.5;
-    public static final int JUMPER_CHARGE_GATE_TICKS = 15;
+    private final MazeCollision collision;
 
-    private PlayerPhysics18() {}
+    public PlayerPhysics18(MazeGraph maze, int centerX, int centerY, int centerZ) {
+        this.collision = new MazeCollision(maze, centerX, centerY, centerZ);
+    }
 
-    public static PlayerState step(
-            PlayerState p,
-            Action action,
-            MazeGraph graph,
-            int centerX,
-            int centerY,
-            int centerZ,
-            boolean padJumpFree) {
+    public void tick(PlayerState p, Action action, int jumpAmplifier) {
+        p.yaw = normalise(p.yaw + action.yawDelta);
+        boolean groundedAtStart = p.onGround;
+        float friction = groundedAtStart ? SLIPPERINESS * GROUND_FRICTION : GROUND_FRICTION;
 
-        double yawRad = Math.toRadians(action.yaw);
-        double forwardX = -Math.sin(yawRad);
-        double forwardZ = Math.cos(yawRad);
-        double rightX = Math.cos(yawRad);
-        double rightZ = Math.sin(yawRad);
-
-        double intentX = action.moveZ * forwardX + action.moveX * rightX;
-        double intentZ = action.moveZ * forwardZ + action.moveX * rightZ;
-        double intentLen = Math.sqrt(intentX * intentX + intentZ * intentZ);
-        if (intentLen > 1e-6) {
-            intentX /= intentLen;
-            intentZ /= intentLen;
-        }
-
-        boolean wantJump = action.jump || action.holdJump;
-        boolean canSpendCharge = p.kit == KitType.JUMPER
-                && p.jumpCharges > 0
-                && p.jumpChargeCooldownTicks <= 0
-                && p.onGround;
-
-        int jumpCharges = p.jumpCharges;
-        int jumpCd = Math.max(0, p.jumpChargeCooldownTicks - 1);
-        double vx = p.vel.x;
-        double vy = p.vel.y;
-        double vz = p.vel.z;
-        boolean onGround = p.onGround;
-
-        boolean speeding = action.sprint && wantJump && onGround && !canSpendCharge
-                && intentLen > 0.1;
-        double speed = action.sprint ? SPRINT_SPEED : WALK_SPEED;
-        if (speeding) {
-            speed *= SPEEDING_MULT;
-        }
-
-        if (onGround) {
-            vx = intentX * speed;
-            vz = intentZ * speed;
-
-            if (wantJump) {
-                if (canSpendCharge || padJumpFree) {
-                    vy = JUMP_VELOCITY;
-                    onGround = false;
-                    if (canSpendCharge && !padJumpFree) {
-                        jumpCharges--;
-                        jumpCd = JUMPER_CHARGE_GATE_TICKS;
-                    }
-                } else if (p.kit != KitType.JUMPER || p.jumpCharges <= 0) {
-                    vy = JUMP_VELOCITY * 0.85;
-                    onGround = false;
+        if (action.jump && groundedAtStart && p.jumpTicks == 0) {
+            if (jumpAmplifier <= -2) {
+                p.vel = new Vec3(p.vel.x - Math.sin(Math.toRadians(p.yaw)) * SPRINT_JUMP_IMPULSE * (action.sprint ? 1.0 : 0.0),
+                        0.0,
+                        p.vel.z + Math.cos(Math.toRadians(p.yaw)) * SPRINT_JUMP_IMPULSE * (action.sprint ? 1.0 : 0.0));
+                p.jumpTicks = 0;
+            } else {
+                double vy = JUMP_VELOCITY + (jumpAmplifier > 0 ? ((jumpAmplifier + 1) * 0.1D) : 0.0D);
+                double vx = p.vel.x;
+                double vz = p.vel.z;
+                if (action.sprint) {
+                    double yaw = Math.toRadians(p.yaw);
+                    vx -= Math.sin(yaw) * SPRINT_JUMP_IMPULSE;
+                    vz += Math.cos(yaw) * SPRINT_JUMP_IMPULSE;
                 }
+                p.vel = new Vec3(vx, vy, vz);
+                p.onGround = false;
+                p.jumpTicks = 10;
             }
+        } else if (!action.jump) {
+            p.jumpTicks = 0;
+        } else if (p.jumpTicks > 0) {
+            p.jumpTicks--;
+        }
+
+        float movementFactor;
+        if (groundedAtStart) {
+            movementFactor = (float) (WALK_SPEED
+                    * (action.sprint ? SPRINT_MULTIPLIER : 1.0F)
+                    * (0.16277136F / Math.pow(friction, 3)));
         } else {
-            vx += intentX * speed * 0.02;
-            vz += intentZ * speed * 0.02;
-            vy -= GRAVITY;
-            vx *= DRAG_AIR;
-            vz *= DRAG_AIR;
+            movementFactor = AIR_MOVE_FACTOR
+                    * (action.sprint ? SPRINT_MULTIPLIER : 1.0F);
         }
 
-        double nx = p.pos.x + vx;
-        double ny = p.pos.y + vy;
-        double nz = p.pos.z + vz;
+        Vec3 v = p.vel;
+        Vec3 added = moveFlying(p.yaw, action.strafe, action.forward, movementFactor);
+        p.vel = new Vec3(v.x + added.x, v.y + added.y, v.z + added.z);
 
-        int row = Coordinates.layoutRow(centerX, (int) Math.floor(nx));
-        int col = Coordinates.layoutCol(centerZ, (int) Math.floor(nz));
-        boolean onPath = Coordinates.inBounds(row, col) && Layouts.isRawPath(graph.raw(row, col));
+        double dx = p.vel.x;
+        double dy = p.vel.y;
+        double dz = p.vel.z;
+        collision.move(p, dx, dy, dz);
 
-        if (ny <= centerY) {
-            ny = centerY;
-            vy = 0;
-            onGround = true;
-        } else {
-            onGround = false;
+        if (!p.onGround) {
+            p.vel = new Vec3(p.vel.x, (p.vel.y - GRAVITY) * AIR_DRAG, p.vel.z);
         }
 
-        if (!onPath && onGround) {
-            nx = p.pos.x;
-            nz = p.pos.z;
-            vx = 0;
-            vz = 0;
-        }
+        p.vel = new Vec3(p.vel.x * friction, p.vel.y, p.vel.z * friction);
+        if (Math.abs(p.vel.x) < 0.005) p.vel = new Vec3(0.0, p.vel.y, p.vel.z);
+        if (Math.abs(p.vel.y) < 0.005) p.vel = new Vec3(p.vel.x, 0.0, p.vel.z);
+        if (Math.abs(p.vel.z) < 0.005) p.vel = new Vec3(p.vel.x, p.vel.y, 0.0);
+    }
 
-        int hitCd = Math.max(0, p.hitCooldownTicks - 1);
+    private static Vec3 moveFlying(float yawDegrees, double strafe, double forward, double factor) {
+        double magnitude = strafe * strafe + forward * forward;
+        if (magnitude < 1.0E-4) return Vec3.ZERO;
+        magnitude = Math.sqrt(magnitude);
+        if (magnitude < 1.0) magnitude = 1.0;
+        double scale = factor / magnitude;
+        strafe *= scale;
+        forward *= scale;
+        double yaw = Math.toRadians(yawDegrees);
+        double sin = Math.sin(yaw);
+        double cos = Math.cos(yaw);
+        return new Vec3(strafe * cos - forward * sin, 0.0,
+                forward * cos + strafe * sin);
+    }
 
-        return new PlayerState(
-                new Vec3(nx, ny, nz),
-                new Vec3(vx, vy, vz),
-                action.yaw,
-                action.pitch,
-                onGround,
-                p.health,
-                p.maxHealth,
-                p.kit,
-                jumpCharges,
-                jumpCd,
-                p.abilityCharges,
-                Math.max(0, p.abilityCooldownTicks - 1),
-                Math.max(0, p.enhancedCooldownTicks - 1),
-                hitCd,
-                p.onSafePad
-        );
+    private static float normalise(float yaw) {
+        while (yaw >= 180.0F) yaw -= 360.0F;
+        while (yaw < -180.0F) yaw += 360.0F;
+        return yaw;
     }
 }
