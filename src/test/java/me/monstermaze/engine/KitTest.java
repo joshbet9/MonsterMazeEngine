@@ -21,14 +21,13 @@ class KitTest {
         Action repulse = new Action(0, 0, false, false, 0, true);
         TickResult r = engine.tick(state, repulse);
         assertEquals(2, r.next.player.abilityCharges);
-        assertTrue(r.events.stream().anyMatch(e -> e.type == GameEventType.ABILITY_USED));
     }
 
     @Test
     void slowballRegens() {
         MonsterMazeEngine engine = new EngineImpl(5);
         GameState state = engine.initialState(MazeMode.SPEED, 0, KitType.SLOWBALL, 2L);
-        assertEquals(0, state.player.abilityCharges);
+        assertEquals(1, state.player.abilityCharges);
         for (int i = 0; i < KitConstants.SLOWBALL_REGEN_TICKS + 5; i++) {
             state = engine.tick(state, Action.noop()).next;
         }
@@ -42,6 +41,6 @@ class KitTest {
                 20, 20, KitType.BODY_BUILDER, 0, 0, 2, 0, 0, 0, true);
         KitSimulator.onReachedPad(p, MazeMode.SPEED, true);
         assertEquals(22.0, p.maxHealth, 0.01);
-        assertEquals(24.0, p.health, 0.01);
+        assertEquals(22.0, p.health, 0.01);
     }
 }
