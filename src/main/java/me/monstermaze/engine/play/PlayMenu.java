@@ -2,11 +2,12 @@ package me.monstermaze.engine.play;
 
 import me.monstermaze.engine.api.KitType;
 import me.monstermaze.engine.api.MazeMode;
+import me.monstermaze.engine.game.StageTimer;
 
 import javax.swing.*;
 import java.awt.*;
 
-/** Simple start menu: pick kit, mode, layout, then launch PlayFrame. */
+/** Setup menu: kit, mode, layout; monsters default per mode. */
 public final class PlayMenu {
 
     public static void main(String[] args) {
@@ -26,7 +27,25 @@ public final class PlayMenu {
                 "ORIGINAL", "SPEED", "MODERN"
         });
         JComboBox<String> layoutBox = new JComboBox<>(new String[]{"0", "1", "2"});
-        JSpinner monsters = new JSpinner(new SpinnerNumberModel(40, 5, 150, 5));
+        JCheckBox useDefaultMobs = new JCheckBox("Use mode default", true);
+        JSpinner monsters = new JSpinner(new SpinnerNumberModel(150, 5, 300, 5));
+        monsters.setEnabled(false);
+        JCheckBox aiBox = new JCheckBox("Start with AI");
+
+        modeBox.addActionListener(e -> {
+            MazeMode m = MazeMode.valueOf((String) modeBox.getSelectedItem());
+            if (useDefaultMobs.isSelected()) {
+                monsters.setValue(StageTimer.starterMonsters(m));
+            }
+        });
+        useDefaultMobs.addActionListener(e -> {
+            monsters.setEnabled(!useDefaultMobs.isSelected());
+            if (useDefaultMobs.isSelected()) {
+                MazeMode m = MazeMode.valueOf((String) modeBox.getSelectedItem());
+                monsters.setValue(StageTimer.starterMonsters(m));
+            }
+        });
+        monsters.setValue(StageTimer.starterMonsters(MazeMode.ORIGINAL));
 
         p.add(new JLabel("Kit"));
         p.add(kitBox);
@@ -34,8 +53,13 @@ public final class PlayMenu {
         p.add(modeBox);
         p.add(new JLabel("Layout"));
         p.add(layoutBox);
-        p.add(new JLabel("Monsters (sim)"));
+        p.add(useDefaultMobs);
         p.add(monsters);
+        p.add(new JLabel(""));
+        p.add(aiBox);
+
+        JLabel hint = new JLabel("<html>Defaults: ORIGINAL/SPEED = 150, MODERN = 225</html>");
+        hint.setFont(hint.getFont().deriveFont(11f));
 
         JButton start = new JButton("Play");
         start.addActionListener(e -> {
@@ -46,15 +70,19 @@ public final class PlayMenu {
                 return;
             }
             int layout = Integer.parseInt((String) layoutBox.getSelectedItem());
-            int mobs = (Integer) monsters.getValue();
+            int mobs = useDefaultMobs.isSelected() ? -1 : (Integer) monsters.getValue();
             menu.dispose();
             PlayFrame frame = new PlayFrame(mode, kit, layout, System.currentTimeMillis(), mobs);
+            if (aiBox.isSelected()) frame.setAiEnabled(true);
             frame.setVisible(true);
             frame.startLoop();
         });
 
         menu.add(p, BorderLayout.CENTER);
-        menu.add(start, BorderLayout.SOUTH);
+        JPanel south = new JPanel(new BorderLayout());
+        south.add(hint, BorderLayout.NORTH);
+        south.add(start, BorderLayout.SOUTH);
+        menu.add(south, BorderLayout.SOUTH);
         menu.pack();
         menu.setLocationRelativeTo(null);
         menu.setVisible(true);
