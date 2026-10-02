@@ -200,6 +200,7 @@ public final class MonsterSimulator {
                 m.direction = -1;
             }
         }
+    }
 
     private int[] chooseNextWaypoint(MonsterState m, int row, int col) {
         List<int[]> choices = new ArrayList<>(maze.traversableCardinals(row, col));
