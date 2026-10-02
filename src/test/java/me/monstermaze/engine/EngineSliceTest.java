@@ -19,10 +19,8 @@ class EngineSliceTest {
         assertEquals(5, state.player.jumpCharges);
         assertEquals(GamePhase.STARTING, state.phase);
 
-        Action move = new Action(1, 0, false, true, 0f, false);
-
         for (int i = 0; i < 80 && state.phase != GamePhase.LIVE; i++) {
-            state = engine.tick(state, move).next;
+            state = engine.tick(state, Action.noop()).next;
         }
 
         // The source countdown ends at 70 ticks; the slice test only needs to
