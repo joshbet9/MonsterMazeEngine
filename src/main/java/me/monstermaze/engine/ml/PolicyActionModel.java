@@ -89,13 +89,13 @@ public final class PolicyActionModel {
     }
 
     private static double scalar(String json,String key){
-        Matcher m=Pattern.compile("\"" + Pattern.quote(key) + "\"\\\\s*:\\s*([-+0-9.eE]+)").matcher(json);
+        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*([-+0-9.eE]+)").matcher(json);
         if(!m.find()) throw new IllegalArgumentException("Missing scalar: "+key);
         return Double.parseDouble(m.group(1));
     }
     private static double[] array(String json,String key,int expected){
         String body=bracketBody(json,key);
-        Matcher m=Pattern.compile("[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?").matcher(body);
+        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*([-+0-9.eE]+)").matcher(json);
         double[] out=new double[expected]; int count=0;
         while(m.find()){ if(count>=expected) throw new IllegalArgumentException("Too many values: "+key); out[count++]=Double.parseDouble(m.group());}
         if(count!=expected) throw new IllegalArgumentException("Expected "+expected+" values in "+key+", got "+count);
