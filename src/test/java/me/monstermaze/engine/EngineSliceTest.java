@@ -39,6 +39,10 @@ class EngineSliceTest {
             state = engine.tick(state, Action.noop()).next;
         }
         assertFalse(state.monsters.isEmpty());
+        // Source MonsterManager only moves monsters once the game is LIVE.
+        while (state.phase != GamePhase.LIVE) {
+            state = engine.tick(state, Action.noop()).next;
+        }
         Vec3 p0 = state.monsters.get(0).pos;
 
         for (int i = 0; i < 40; i++) {
