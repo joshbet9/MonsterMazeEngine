@@ -145,7 +145,7 @@ public final class EngineImpl implements MonsterMazeEngine {
                     state.activePad, state.previewPad, currentTick);
 
             MonsterSimulator monsters = new MonsterSimulator(
-                    graph, centerX, centerY, centerZ, monsterRandom, 1.0, currentTick);
+                    graph, centerX, centerY, centerZ, monsterRandom, 1.4, currentTick);
             monsters.tick(state.monsters, currentTick);
 
             if (state.phase == GamePhase.LIVE) {
