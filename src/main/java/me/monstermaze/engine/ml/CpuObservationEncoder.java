@@ -4,6 +4,7 @@ import me.monstermaze.engine.api.GameState;
 import me.monstermaze.engine.api.KitType;
 import me.monstermaze.engine.api.MonsterState;
 import me.monstermaze.engine.game.EngineImpl;
+import me.monstermaze.engine.maze.Layouts;
 import me.monstermaze.engine.pad.SafePadSimulator;
 
 import java.util.Arrays;
@@ -89,9 +90,9 @@ public final class CpuObservationEncoder {
         out[25] = abilityReady(state);
         out[26] = state.mode == me.monstermaze.engine.api.MazeMode.SPEED ? 1.0f : 0.0f;
         out[27] = state.mode == me.monstermaze.engine.api.MazeMode.MODERN ? 1.0f : 0.0f;
-        out[28] = state.mazePattern == 0 ? 1.0f : 0.0f;
-        out[29] = state.mazePattern == 1 ? 1.0f : 0.0f;
-        out[30] = state.mazePattern == 2 ? 1.0f : 0.0f;
+        out[28] = (state.maze != null ? state.maze.layoutId : -1) == 0 ? 1.0f : 0.0f;
+        out[29] = (state.maze != null ? state.maze.layoutId : -1) == 1 ? 1.0f : 0.0f;
+        out[30] = (state.maze != null ? state.maze.layoutId : -1) == 2 ? 1.0f : 0.0f;
         out[31] = clamp((state.stage - 1.0 + phaseElapsed) / 100.0, 0.0, 1.0);
 
         int row = (int) Math.floor(px - (state.centerX - 49));
