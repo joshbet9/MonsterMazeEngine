@@ -16,7 +16,6 @@ class CpuObservationEncoderTest {
         state.phaseTimerMax = 400;
         state.phaseTimerTicks = 300;
         state.tick = 123L;
-        state.mazePattern = 2;
         state.activePad = new SafePadState(101, 202, 63, 11, true, false);
 
         int[][] raw = new int[99][99];
@@ -51,7 +50,7 @@ class CpuObservationEncoderTest {
         assertArrayEquals(a, b);
         assertEquals(96, a.length);
         assertEquals(1.0f, a[27]); // MODERN
-        assertEquals(1.0f, a[30]); // pattern 2
+        assertEquals(1.0f, a[30]); // layout/pattern 2
         assertEquals(1.0f, a[23], 1e-6f); // Maverick ordinal 4 / 4
         assertTrue(a[43] > 0.0f);
         assertTrue(a[44] > 0.0f);
