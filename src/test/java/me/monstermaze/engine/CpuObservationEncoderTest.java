@@ -26,7 +26,7 @@ class CpuObservationEncoderTest {
         raw[50][51] = 1;
         floor[50][50] = true;
         floor[50][51] = true;
-        state.maze = new me.monstermaze.engine.api.MazeState(0, raw, traversable, floor, pad);
+        state.maze = new me.monstermaze.engine.api.MazeState(2, raw, traversable, floor, pad);
 
         state.player = new PlayerState(
                 new Vec3(101.5, 64.0, 200.5),
