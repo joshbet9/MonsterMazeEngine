@@ -29,6 +29,6 @@ public final class DirectCpuCompetitor {
     public Action decide(GameState state) {
         if (state == null || !state.alive || state.completed) return Action.noop();
         encoder.encode(state, observation);
-        return policy.decide(state);
+        return policy.decide(observation);
     }
 }
