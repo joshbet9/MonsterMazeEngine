@@ -387,3 +387,30 @@ Engine should not grow into another production game implementation with independ
 When a mechanic is corrected, the change must be justified against MonsterMaze evidence/source and accompanied by differential tests.
 
 The objective is not to create the smartest possible search controller here. The objective is to make the true CPU policy trainable and measurable.
+
+
+## Exact-state training, player-equivalent observation
+
+Engine has access to complete simulated state, just as MonsterMaze has complete authoritative state.
+
+Training should generate the **same compact observation** that the production server exposes to the CPU brain.
+
+Do not train the production policy directly on privileged simulator fields such as hidden future pad state, distant monsters or arbitrary future trajectory knowledge unless those fields are deliberately part of the configured CPU awareness model.
+
+This prevents the common failure mode where the simulator policy looks strong but cannot be deployed under the real runtime information contract.
+
+## Route catalogue
+
+Because the game has a small number of fixed maze patterns, static route data should be precomputed once and reused by all environments.
+
+A route catalogue contains physical route families, gap/corner metadata and route costs.
+
+Training may additionally use expensive search to produce better labels; the catalogue itself remains lightweight and deterministic.
+
+## Simulation throughput
+
+A correct scalar Engine tick remains the reference implementation.
+
+High-volume training should use reusable mutable state, static shared maze data and batched policy inference.
+
+The 99x99 maze should never be deep-copied as part of an ordinary policy step.
