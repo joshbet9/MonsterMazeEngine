@@ -1,7 +1,6 @@
 package me.monstermaze.engine.ai;
 
 import me.monstermaze.engine.api.Action;
-import me.monstermaze.engine.api.GameState;
 
 /**
  * Production CPU-policy boundary.
@@ -12,5 +11,5 @@ import me.monstermaze.engine.api.GameState;
  */
 public interface DirectCpuPolicy {
     void reset(long seed);
-    Action decide(GameState state);
+    Action decide(float[] observation);
 }
