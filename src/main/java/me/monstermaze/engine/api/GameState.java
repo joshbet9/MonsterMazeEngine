@@ -7,6 +7,11 @@ import java.util.List;
  * Mutable simulation snapshot whose fields correspond to the state exposed by
  * MonsterMazeAI. The local UI may retain references between ticks; callers
  * should treat a returned TickResult as the authoritative next snapshot.
+ *
+ * <p>The maze object is a snapshot value, not a per-tick scratch buffer. Engine
+ * ticks may safely share the same MazeState instance until the dynamic maze
+ * overlay actually changes. The engine replaces it with a new snapshot when
+ * a pad/centre mutation occurs.
  */
 public final class GameState {
     public long tick;
@@ -51,7 +56,10 @@ public final class GameState {
         s.centerDeteriorationStep = centerDeteriorationStep;
         s.previewPadRequested = previewPadRequested;
         s.pendingMonsterSpawns = pendingMonsterSpawns;
-        s.maze = copyMaze(maze);
+        // MazeState is an immutable-by-convention snapshot. Its arrays are
+        // replaced by the engine rather than mutated during a tick, so sharing
+        // the reference here avoids cloning 99x99 cells on every action.
+        s.maze = maze;
         s.player = player == null ? null : player.copy();
         for (MonsterState m : monsters) s.monsters.add(m.copy());
         s.oldPads.addAll(oldPads);
@@ -75,19 +83,4 @@ public final class GameState {
         this.centerZ = centerZ;
     }
 
-    private static MazeState copyMaze(MazeState source) {
-        if (source == null) return null;
-        int n = source.raw.length;
-        int[][] raw = new int[n][];
-        boolean[][] traversable = new boolean[n][];
-        boolean[][] floor = new boolean[n][];
-        boolean[][] pad = new boolean[n][];
-        for (int i = 0; i < n; i++) {
-            raw[i] = source.raw[i].clone();
-            traversable[i] = source.traversable[i].clone();
-            floor[i] = source.physicalFloor[i].clone();
-            pad[i] = source.padSurface[i].clone();
-        }
-        return new MazeState(source.layoutId, raw, traversable, floor, pad);
-    }
 }
