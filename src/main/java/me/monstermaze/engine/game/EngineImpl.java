@@ -34,7 +34,10 @@ public final class EngineImpl implements MonsterMazeEngine {
     private SeededRandom monsterRandom;
     private SeededRandom padRandom;
     private PlayerPhysics18 physics;
+    private MonsterSimulator monsterSimulator;
     private int nextMonsterId;
+    /** True only when the dynamic maze snapshot must be rebuilt for TickResult. */
+    private boolean mazeSnapshotDirty;
  
     public EngineImpl() {
         this(Coordinates.DEFAULT_CENTER_X, Coordinates.DEFAULT_CENTER_Y,
@@ -70,7 +73,10 @@ public final class EngineImpl implements MonsterMazeEngine {
         monsterRandom = new SeededRandom(seed ^ MONSTER_SEED_XOR);
         padRandom = new SeededRandom(seed ^ PAD_SEED_XOR);
         physics = new PlayerPhysics18(graph, centerX, centerY, centerZ);
+        monsterSimulator = new MonsterSimulator(graph, centerX, centerY, centerZ,
+                monsterRandom, 1.4, seed ^ MONSTER_SEED_XOR);
         nextMonsterId = 1;
+        mazeSnapshotDirty = true;
  
         PlayerState player = new PlayerState(
                 new Vec3(Coordinates.pathCenterX(centerX, Layouts.HALF), centerY,
@@ -155,9 +161,7 @@ public final class EngineImpl implements MonsterMazeEngine {
             // during STARTING behind the source containment barrier, but they do not move
             // or damage the player until LIVE.
             if (state.phase == GamePhase.LIVE) {
-                MonsterSimulator monsters = new MonsterSimulator(
-                        graph, centerX, centerY, centerZ, monsterRandom, 1.4, currentTick);
-                monsters.tick(state.monsters, currentTick);
+                monsterSimulator.tick(state.monsters, currentTick);
 
                 int bumpResult = MonsterMazeBumpModel.apply(state);
                 if (bumpResult == MonsterMazeBumpModel.RESULT_NORMAL_HIT) {
@@ -190,7 +194,10 @@ public final class EngineImpl implements MonsterMazeEngine {
             events.add(new GameEvent(GameEventType.ELIMINATED, null));
         }
 
-        state.maze = graph.toMazeState();
+        if (mazeSnapshotDirty || state.maze == null) {
+            state.maze = graph.toMazeState();
+            mazeSnapshotDirty = false;
+        }
         boolean terminal = !state.alive || state.phase == GamePhase.ENDING;
         return new TickResult(state, events, terminal);
     }
@@ -291,6 +298,7 @@ public final class EngineImpl implements MonsterMazeEngine {
             SafePadSimulator.installSurface(
                     graph, centerX, centerZ, state.activePad);
             removeMonstersOnPad(state, state.activePad);
+            mazeSnapshotDirty = true;
         }
 
         int extra = StageTimer.monstersPerTransition(state.mode);
@@ -383,6 +391,7 @@ public final class EngineImpl implements MonsterMazeEngine {
             state.oldPads.remove(pad);
             state.oldPadDecaySeconds.remove(padKey(pad));
             SafePadSimulator.decayOldPad(graph, centerX, centerZ, pad);
+            mazeSnapshotDirty = true;
         }
     }
 
@@ -402,6 +411,7 @@ public final class EngineImpl implements MonsterMazeEngine {
             }
         }
         state.centerDeteriorationStep = -1;
+        mazeSnapshotDirty = true;
     }
 
     private boolean onOldPad(GameState state, PlayerState p) {
@@ -415,6 +425,9 @@ public final class EngineImpl implements MonsterMazeEngine {
         if (graph == null || graph.layoutId() != state.maze.layoutId) {
             graph = graphFromState(state.maze);
             physics = new PlayerPhysics18(graph, centerX, centerY, centerZ);
+            monsterSimulator = new MonsterSimulator(graph, centerX, centerY, centerZ,
+                    monsterRandom, 1.4, 0x6A09E667F3BCC909L);
+            mazeSnapshotDirty = true;
             if (monsterRandom == null) monsterRandom = new SeededRandom(0x1234ABCDL);
             if (padRandom == null) padRandom = new SeededRandom(0x5678EF01L);
         }
