@@ -100,6 +100,7 @@ public final class EngineImpl implements MonsterMazeEngine {
         state.phaseTimerTicks = state.phaseTimerMax;
         state.centerDeteriorationStep = INITIAL_CENTER_STAGE;
         state.maze = graph.toMazeState();
+        mazeSnapshotDirty = false;
         state.player = player;
         state.activePad = activePad;
         state.inMonsterMaze = true;
