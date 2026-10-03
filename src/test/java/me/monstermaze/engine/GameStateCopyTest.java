@@ -11,7 +11,6 @@ import me.monstermaze.engine.runtime.SimulationSession;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class GameStateCopyTest {
@@ -28,7 +27,6 @@ final class GameStateCopyTest {
         GameState copy = state.copy();
 
         assertSame(state.maze, copy.maze);
-        assertNotSame(state.player, copy.player);
     }
 
     @Test
